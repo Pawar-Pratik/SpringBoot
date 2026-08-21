@@ -250,3 +250,5 @@ Copy this into a `PROGRESS.md` and tick as you go. Add the date — seeing pace 
 **The warning:** you cannot read your way to this. The people who fail at this are not the ones who lack intelligence; they're the ones who mistake *understanding a lesson while reading it* for *being able to produce it under pressure*. Close the file and explain it out loud. That discomfort is the learning.
 
 Start here → **[Lesson 01: The JVM, the classpath & build tools](01-java-for-spring/01-jvm-build-and-classpath.md)**
+
+---
