@@ -6,7 +6,15 @@
 
 ---
 
-## 1. `@SpringBootTest` and the context cache
+## 1. The idea in one sentence
+
+> **An integration test is only worth its seconds if it exercises the thing production will: the real database, a real HTTP round trip, the real security rules — and if it doesn't, it can pass while the code is broken.**
+
+The two forces in this lesson pull against each other. Realism costs time, so test slices and the context cache exist to buy it back. Knowing which realism you're giving up in each slice is the whole skill.
+
+---
+
+## 2. `@SpringBootTest` and the context cache
 
 ```java
 @SpringBootTest
@@ -62,7 +70,7 @@ It logs cache hits, misses, and size — you'll see exactly how many contexts yo
 
 ---
 
-## 2. Test slices — load only what you need
+## 3. Test slices — load only what you need
 
 Boot provides annotations that load a **subset** of auto-configuration. Much faster than `@SpringBootTest`.
 
@@ -230,7 +238,7 @@ class Trap {
 
 ---
 
-## 3. Testcontainers — real infrastructure, in tests
+## 4. Testcontainers — real infrastructure, in tests
 
 ### Why not H2
 
@@ -357,7 +365,7 @@ public class DatabaseCleaner {
 
 ---
 
-## 4. Full-stack tests with a real HTTP server
+## 5. Full-stack tests with a real HTTP server
 
 ```java
 @SpringBootTest(webEnvironment = WebEnvironment.RANDOM_PORT)
@@ -401,7 +409,7 @@ class MonitorApiIntegrationTest extends AbstractIntegrationTest {
 
 ---
 
-## 5. Testing security
+## 6. Testing security
 
 ```java
 @SpringBootTest
@@ -460,7 +468,7 @@ class SecurityIntegrationTest extends AbstractIntegrationTest {
 
 ---
 
-## 6. Testing outbound HTTP with WireMock
+## 7. Testing outbound HTTP with WireMock
 
 Vigil's whole job is calling other people's URLs. You need to test timeouts, 500s, and slow responses **without depending on the internet.**
 
@@ -540,7 +548,7 @@ class HttpCheckExecutorTest {
 
 ---
 
-## 7. Build this — Vigil's integration test suite
+## 8. Build & break — Vigil's integration test suite
 
 **1. The base class.** `AbstractIntegrationTest` with a singleton Postgres container, `@ActiveProfiles("test")`, and a `DatabaseCleaner` in `@AfterEach`. **Every integration test extends it, so they all share one context.**
 
@@ -573,9 +581,36 @@ junit.jupiter.execution.parallel.mode.classes.default=concurrent
 ```
 Run the suite. **Things will break** — that's the point: it surfaces every hidden shared-state dependency. Fix them by giving each test its own organization with a random slug. **Record the speedup.**
 
+### Explain out loud (60s)
+
+1. How the context cache works, and the two habits that quietly multiply your contexts.
+2. Five things H2 can't test that your schema actually uses.
+3. Why `em.flush()` and `em.clear()` are the difference between a real repository test and a worthless one.
+4. The `RANDOM_PORT` plus `@Transactional` trap, in terms of threads.
+5. Why testing your timeouts matters more than testing the happy path of an outbound call.
+
 ---
 
-## 8. Interview traps
+## 9. Production rules
+
+| Do / Never | Why |
+|---|---|
+| **Keep one `@SpringBootTest` with an empty test body** | It proves the whole object graph constructs — every bean resolves, every property binds — so a wiring error fails the build instead of the deploy |
+| **Consolidate `properties` and `@MockitoBean` into a shared base class** | The context cache keys on configuration, so every distinct combination is another full startup; this is the usual answer to "why is our suite slow?" |
+| **Use Testcontainers, not H2** | `jsonb`, `SKIP LOCKED`, window functions, RLS, real query plans and real SQLStates either don't exist or behave differently — H2 tests a database you don't ship |
+| **Use `@ServiceConnection` rather than hand-wiring `@DynamicPropertySource`** | Boot detects the container and configures the connection itself, which removes the most error-prone part of the setup |
+| **Always `em.flush()` and `em.clear()` in repository tests** | Without it the assertion reads from the persistence context, so the test passes even when the column mapping is wrong and no SQL ever ran |
+| **Prefer unique data per test over shared fixtures** | A random org per test means tests never collide, which is what makes parallel execution possible and mirrors real tenant isolation |
+| **Know that `@Transactional` rollback does not apply with `RANDOM_PORT`** | The request runs on a Tomcat thread with its own transaction, so anything it commits survives your test — clean up explicitly |
+| **Don't use `@DataJpaTest` for commit semantics** | It rolls back, so `AFTER_COMMIT` listeners, `REQUIRES_NEW` isolation and commit triggers can't be observed at all |
+| **Assert that sensitive fields are absent from responses** | `$.passwordHash` doesNotExist is what stops a future field addition from quietly publishing a secret |
+| **Write a cross-tenant test per endpoint** | It is a security control expressed as code, and it is the single most valuable set of tests in a multi-tenant project |
+| **Test that your timeouts actually fire** | An unenforced timeout is what causes thread-pool exhaustion and cascading outages, and nothing else in your suite would notice |
+| **Use `.andDo(print())` before guessing at a 400** | It prints the resolved handler, the request and the whole response body — usually the entire answer |
+
+---
+
+## 10. Interview traps
 
 **Q1. What does `@SpringBootTest` do, and what's the cost?**
 Loads the full application context (all auto-configuration, all beans) — 2–10 seconds. Use it for full-stack behaviour; use slices (`@WebMvcTest`, `@DataJpaTest`) when you only need one layer. An empty `contextLoads` test is genuinely valuable: it proves the whole object graph and all configuration binding is valid.
@@ -615,7 +650,7 @@ An unenforced timeout means a slow dependency holds threads and connections inde
 
 ---
 
-## 9. Retention check
+## 11. Retention check
 
 1. Name four things that fork a new cached Spring context.
 2. Give five Postgres features H2 can't test, and tie each to something Vigil does.

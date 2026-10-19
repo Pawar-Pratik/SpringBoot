@@ -6,7 +6,15 @@
 
 ---
 
-## 1. Why test — the reason that actually matters
+## 1. The idea in one sentence
+
+> **A test suite is not a bug net, it's a licence to change things — so the only tests worth keeping are the ones that still pass after a refactor that changed nothing a user can see.**
+
+That single criterion decides almost every argument in this lesson: how much to mock, whether to verify interactions, what a good test name says, and why a service that only delegates to a repository deserves an integration test rather than a unit test full of stubs.
+
+---
+
+## 2. Why test — the reason that actually matters
 
 The usual answer is "to catch bugs." That's the *least* important reason.
 
@@ -16,7 +24,7 @@ Which reframes everything: a test that breaks whenever you refactor is *actively
 
 ---
 
-## 2. The pyramid, and the honest version of it
+## 3. The pyramid, and the honest version of it
 
 ```
               ╱╲            E2E / UI            few (5–20)
@@ -46,7 +54,7 @@ That answer shows you've thought about it rather than repeating a diagram.
 
 ---
 
-## 3. Unit tests — no Spring, no mocks where possible
+## 4. Unit tests — no Spring, no mocks where possible
 
 ```java
 class UptimeCalculatorTest {
@@ -173,7 +181,7 @@ AssertJ ships with `spring-boot-starter-test`, so there's no reason not to use i
 
 ---
 
-## 4. Mockito — and the discipline of using it sparingly
+## 5. Mockito — and the discipline of using it sparingly
 
 ```java
 @ExtendWith(MockitoExtension.class)
@@ -301,7 +309,7 @@ class InMemoryMonitorRepository implements MonitorRepository {
 
 ---
 
-## 5. Test quality — how to judge a test
+## 6. Test quality — how to judge a test
 
 ### The FIRST properties
 
@@ -368,7 +376,7 @@ void coversEverythingAndTestsNothing() {
 
 ---
 
-## 6. Test data — the thing that actually determines maintainability
+## 7. Test data — the thing that actually determines maintainability
 
 **Test data setup is where test suites go to die.** Twenty tests each constructing a full `Monitor` with eight fields means one constructor change breaks all twenty.
 
@@ -411,7 +419,7 @@ var paused  = TestData.monitor().withStatus(PAUSED).withIntervalSeconds(300).bui
 
 ---
 
-## 7. Build this — Vigil's unit tests
+## 8. Build & break — Vigil's unit tests
 
 **1. Extract genuinely testable logic.** Pull `UptimeCalculator` out of any service:
 ```java
@@ -466,9 +474,36 @@ Then write a test proving that an incident's `startedAt` is exactly your fixed i
 ```
 Open `target/site/jacoco/index.html`. **Find a class with high coverage and few assertions, and admit to yourself that the number is lying.** That's the lesson.
 
+### Explain out loud (60s)
+
+1. The real reason to test, in one sentence that isn't "to catch bugs".
+2. The calibrated pyramid answer: what gets a unit test and what doesn't.
+3. Mock vs stub vs fake vs spy, and when a fake beats all of them.
+4. What over-verification costs you, demonstrated with a refactor.
+5. Why 100% coverage is not the goal, and what you'd ask instead.
+
 ---
 
-## 8. Interview traps
+## 9. Production rules
+
+| Do / Never | Why |
+|---|---|
+| **Treat the pyramid as a cost heuristic, not a quota** | Pure logic earns fast unit tests; anything crossing a boundary earns an integration test, because that's where the bugs are and where mocks prove nothing |
+| **Test pure business logic with no Spring and no mocks** | A sub-millisecond test with explicit construction is the cheapest feedback you will ever get, and it only exists because of constructor injection |
+| **Inject a `Clock` instead of calling `Instant.now()`** | Time becomes an input you can fix, which is the difference between testing time-dependent behaviour and hoping |
+| **Assert on outcomes; verify only interactions that *are* the outcome** | Over-verification tests the implementation, so extracting a helper or reordering two calls fails a test although nothing broke |
+| **Never mock a type you don't own, or a value object** | A mock of someone else's library encodes your belief about its behaviour, and the test keeps passing after that belief stops being true |
+| **Prefer a fake to a pile of stubs** | An in-memory repository is a working implementation, so the test exercises real behaviour instead of asserting your own assumptions back at you |
+| **Don't unit-test a service that only delegates** | Mocking the repository and the mapper leaves nothing under test — cover it with an integration test where both are real |
+| **Avoid `@Spy` on the class under test** | Stubbing a class's own method almost always means it does two jobs; extract the stubbed part into a collaborator instead |
+| **Write one negative test per feature** | Positive tests catch typos; "no notification for a paused monitor" and "no second incident" catch design errors |
+| **Name a test after the behaviour, not the method** | The name is what someone reads when it fails at 2am, and a method name tells them nothing about what was expected |
+| **Build an Object Mother or builders for test data** | Twenty tests each constructing an eight-field entity means one constructor change breaks all twenty |
+| **Use coverage as a smell detector, never as a target** | It measures which lines ran, not whether behaviour is correct — mandating 100% reliably produces assertion-free tests |
+
+---
+
+## 10. Interview traps
 
 **Q1. Why write tests?**
 Primarily to make change safe. Without them every modification carries unbounded risk, so refactoring stops and the codebase calcifies. Catching bugs is a benefit; enabling change is the purpose. It follows that a test which breaks on every refactor is actively harmful.
@@ -505,7 +540,7 @@ Negative ones — asserting what must *not* happen (no duplicate incident, no no
 
 ---
 
-## 9. Retention check
+## 11. Retention check
 
 1. Give the primary reason to write tests, and the consequence for how you judge a test.
 2. Name three things you should never mock, and what to use instead for each.

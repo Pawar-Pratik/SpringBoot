@@ -6,7 +6,15 @@
 
 ---
 
-## 1. ArchUnit — architecture as executable tests
+## 1. The idea in one sentence
+
+> **A rule nobody can break by accident is worth more than a rule everybody agrees with: ArchUnit turns layering into a failing build, a spec snapshot turns a breaking change into a PR diff, and mutation testing turns "we have coverage" into "our assertions actually matter."**
+
+The flip side is the same principle: a flaky test is a rule that *can't* be trusted, so retrying it silently converts your suite from a signal into a ritual.
+
+---
+
+## 2. ArchUnit — architecture as executable tests
 
 From Lesson 13: architecture erodes because nothing enforces it. **ArchUnit turns your rules into JUnit tests.**
 
@@ -112,7 +120,7 @@ class ArchitectureTest {
 
 ---
 
-## 2. Contract testing
+## 3. Contract testing
 
 **The problem:** Vigil's API has consumers (a web dashboard, a mobile app, customer scripts). Your integration tests prove *your* code works. They don't prove you haven't broken a consumer.
 
@@ -175,7 +183,7 @@ Spring Cloud Contract generates provider verification tests **and** a stub JAR t
 
 ---
 
-## 3. Mutation testing — testing your tests
+## 4. Mutation testing — testing your tests
 
 **The question nobody asks: do my tests actually detect bugs?** Coverage says a line ran. It doesn't say an assertion would have caught it being wrong.
 
@@ -234,7 +242,7 @@ SURVIVED  IncidentService:82   removed call to notifier.send()
 
 ---
 
-## 4. Flaky tests — the thing that destroys trust
+## 5. Flaky tests — the thing that destroys trust
 
 **A flaky test is worse than no test.** Once people learn to re-run CI until it goes green, every real failure gets re-run too. **The suite stops being a signal.**
 
@@ -303,7 +311,7 @@ void occasionallyFailsUnderLoad() { }
 
 ---
 
-## 5. Property-based testing (know it exists)
+## 6. Property-based testing (know it exists)
 
 Instead of examples, state *properties* that must hold for all inputs, and let the framework hunt for counterexamples.
 
@@ -332,7 +340,7 @@ void resolvingThenReopeningAnIncidentNeverLosesTheOriginalStartTime(
 
 ---
 
-## 6. CI strategy
+## 7. CI strategy
 
 ### Stage the pipeline by feedback speed
 
@@ -437,7 +445,7 @@ Pull request must have:
 
 ---
 
-## 7. Build this — Vigil's test infrastructure
+## 8. Build & break — Vigil's test infrastructure
 
 **1. ⭐ ArchUnit rules.** Write at least eight from §1, including `transactionalMethodsMustBePublic` and `entitiesMustNotBeReturnedFromControllers`. **Then deliberately violate each one and read the failure message.** Note that ArchUnit names the exact class and location. **These 30 lines are the highest-leverage code in your test suite.**
 
@@ -474,9 +482,38 @@ Run `./mvnw spotless:apply` once, commit the result, then add `spotless:check` t
 
 **10. Optional: property-based test the uptime calculator** with jqwik. Assert the percentage is always in [0, 100], that a list of all-UP results always yields 100, and that adding a PAUSED result never *decreases* uptime. **See if the shrinker finds an edge case you missed.** It often does.
 
+### Explain out loud (60s)
+
+1. Why an ArchUnit rule beats a documented convention, in terms of when each is enforced.
+2. What a spec snapshot catches that your integration tests can't.
+3. Coverage vs mutation testing, in one sentence each.
+4. Why retrying a flaky test is the wrong fix.
+5. How you'd order CI stages, and why that order.
+
 ---
 
-## 8. Interview traps
+## 9. Production rules
+
+| Do / Never | Why |
+|---|---|
+| **Enforce layering with ArchUnit, not convention** | A violation then fails CI with the offending class named and the rationale in the message, instead of relying on a reviewer noticing |
+| **Put the rationale in ArchUnit's `.because(...)`** | It is the one place a new team member will actually read it — a wiki page explaining the rule is a page nobody opens |
+| **Snapshot the OpenAPI spec and diff it in the PR** | The value isn't the passing test; it's that "field removed, field added" becomes visible to a reviewer before a consumer discovers it |
+| **Reach for consumer-driven contracts only when teams deploy independently** | For one API and one frontend released together, the spec snapshot plus integration tests gives most of the benefit for a fraction of the setup |
+| **Use mutation testing to find untested assertions** | Coverage says a line ran; a surviving mutant says you could delete that behaviour entirely and nothing would fail |
+| **Run mutation testing on changed files, not the whole codebase** | It reruns the suite once per mutant, so a full run is minutes to hours and will simply stop being run |
+| **Never retry a flaky test** | Flakiness usually reports a real race in your code; a retry annotation silences the bug report and makes the cause permanent |
+| **Quarantine flaky tests with a ticket, an owner and a date** | Deleting loses the signal and ignoring erodes trust until every genuine failure gets re-run too |
+| **Never assert absolute counts over a shared table** | It is the single most common flake; scope every assertion to data the test itself created |
+| **Replace every `Thread.sleep` with Awaitility** | It is faster on a fast machine and more reliable on a slow one — strictly better in both directions |
+| **Never let a test require the internet** | A real API call fails on a network hiccup or someone else's rate limit, and the failure tells you nothing about your code |
+| **Stage CI by how fast each step fails** | A compile error should surface in ninety seconds, not after a twelve-minute Testcontainers run |
+| **Split `*Test` (Surefire) from `*IT` (Failsafe)** | `mvn test` stays a twenty-second loop, and Failsafe defers failure so container teardown still runs |
+| **Gate on "coverage must not decrease on changed files"** | An absolute threshold punishes anyone touching legacy code and rewards assertion-free tests; the delta asks the only useful question |
+
+---
+
+## 10. Interview traps
 
 **Q1. How do you stop architecture from eroding?**
 ArchUnit tests in the normal suite, so violations fail CI with a message explaining the rule. It covers layering (controllers must not touch repositories), feature boundaries, cycles, and correctness rules like "`@Transactional` methods must be public" — which catches the proxy no-op that produces no error. Cheaper and stricter than review or a wiki page.
@@ -513,7 +550,7 @@ Spotless (ends formatting debates and makes every file look deliberate), Dependa
 
 ---
 
-## 9. Retention check
+## 11. Retention check
 
 1. Name two ArchUnit rules that catch *correctness* bugs rather than style.
 2. Explain in one sentence what mutation testing tells you that coverage can't.
