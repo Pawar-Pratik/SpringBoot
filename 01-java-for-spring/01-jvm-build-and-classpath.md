@@ -416,7 +416,7 @@ Cover the answers. Answer out loud first.
 An ordered list of locations (directories and JARs) the ClassLoader searches for `.class` files, resolved by fully-qualified name, first match wins. Consequences: duplicate classes are silently shadowed, and ordering can determine behaviour.
 
 **Q2. Difference between `ClassNotFoundException`, `NoClassDefFoundError`, and `NoSuchMethodError`?**
-See the table in §2. The key discriminator: `ClassNotFoundException` = explicit dynamic lookup failed (checked exception). `NoClassDefFoundError` = linkage failure for a class the compiler resolved (an `Error`); can also mask a failed static initializer. `NoSuchMethodError` = class present, signature absent → version mismatch.
+See the table in §3. The key discriminator: `ClassNotFoundException` = explicit dynamic lookup failed (checked exception). `NoClassDefFoundError` = linkage failure for a class the compiler resolved (an `Error`); can also mask a failed static initializer. `NoSuchMethodError` = class present, signature absent → version mismatch.
 
 **Q3. How does Spring Boot's executable JAR work? Why isn't it a normal JAR?**
 Fat JAR with dependencies nested under `BOOT-INF/lib`. The JVM can't load nested JARs, so the manifest's `Main-Class` is Boot's `JarLauncher`, which installs a custom classloader capable of reading nested entries, then reflectively invokes the real `Start-Class`.

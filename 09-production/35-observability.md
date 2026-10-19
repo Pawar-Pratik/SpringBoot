@@ -63,7 +63,7 @@ management:
         liveness:
           include: ping
         readiness:
-          include: db, redis                                # ★ see §2.1 — choose carefully
+          include: db, redis                                # ★ see §3.1 — choose carefully
   server:
     port: 9090                                              # ★ separate port
   metrics:
@@ -77,7 +77,7 @@ management:
     build: { enabled: true }
 ```
 
-### 2.1 Liveness vs readiness — get this wrong and you'll cause an outage
+### 3.1 Liveness vs readiness — get this wrong and you'll cause an outage
 
 | Probe | Question | Failure action |
 |---|---|---|
@@ -144,7 +144,7 @@ public class CheckWorkerHealthIndicator implements HealthIndicator {
 }
 ```
 
-**This is genuinely useful for Vigil:** the API can be perfectly healthy while the check engine has silently died (a scheduled task that threw and was cancelled — Lesson 32 §2.1). **A health check that only tests HTTP responsiveness would report everything green while the product does nothing.** Health checks should reflect *whether the service is doing its job*, not merely whether it responds.
+**This is genuinely useful for Vigil:** the API can be perfectly healthy while the check engine has silently died (a scheduled task that threw and was cancelled — Lesson 32 §3.1). **A health check that only tests HTTP responsiveness would report everything green while the product does nothing.** Health checks should reflect *whether the service is doing its job*, not merely whether it responds.
 
 ---
 
@@ -314,7 +314,7 @@ try {
 
 **Every log line in that request now carries the correlation ID automatically**, without threading it through every method signature. This is what turns thousands of interleaved log lines from concurrent requests into reconstructible per-request narratives.
 
-**And the corollary you now know well:** MDC is `ThreadLocal`, so it doesn't cross `@Async`, `@Scheduled`, or reactive boundaries — hence the `TaskDecorator` (Lesson 32 §1.3). **Fifth appearance of this lesson; by now it should be automatic.**
+**And the corollary you now know well:** MDC is `ThreadLocal`, so it doesn't cross `@Async`, `@Scheduled`, or reactive boundaries — hence the `TaskDecorator` (Lesson 32 §2.3). **Fifth appearance of this lesson; by now it should be automatic.**
 
 ### Log hygiene
 
@@ -500,11 +500,11 @@ services:
 
 **2. ⭐ The liveness mistake, demonstrated.** Put `db` in the **liveness** group. Stop Postgres. **Confirm liveness reports DOWN.** Then reason through what Kubernetes would do: kill every pod, restart, all reconnect at once, fail again. **Write down the incident narrative.** Then fix it — liveness = `ping`, readiness = `db`. **This is the most important operational lesson in the module.**
 
-**3. Custom health indicators:** `CheckWorkerHealthIndicator` (backlog and last-dispatch age) and a Redis indicator reporting **DEGRADED** rather than DOWN (Lesson 33 §6). Confirm that stopping Redis does **not** make you unready.
+**3. Custom health indicators:** `CheckWorkerHealthIndicator` (backlog and last-dispatch age) and a Redis indicator reporting **DEGRADED** rather than DOWN (Lesson 33 §7). Confirm that stopping Redis does **not** make you unready.
 
 **4. Prometheus metrics.** Add the registry, hit `/actuator/prometheus`, and read the raw output. Find `http_server_requests_seconds_bucket` and note the templated `uri` label.
 
-**5. Vigil's business metrics** from §3: counters for checks and notifications, a timer for check duration, and gauges for `checks.overdue`, `incidents.open`, and `outbox.pending`.
+**5. Vigil's business metrics** from §4: counters for checks and notifications, a timer for check duration, and gauges for `checks.overdue`, `incidents.open`, and `outbox.pending`.
 
 **6. ⭐ Cause a cardinality explosion.** Add `monitorId` as a metric tag. Seed 1,000 monitors, run checks, then hit `/actuator/prometheus` and **count the lines.** Watch the endpoint slow down and the response balloon. **Then remove it and note where that data belongs instead** — a structured log field. This experiment makes the cardinality rule visceral rather than theoretical.
 

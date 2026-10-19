@@ -498,9 +498,9 @@ Store the key → response mapping (Redis, TTL 24h). A repeat returns the *origi
 ```
 Build, then **open `target/generated-sources/annotations/.../MonitorMapperImpl.java` and read it.** Then add a field to the DTO without mapping it and watch the **build fail**. That's the value.
 
-**3. Full validation.** Add constraints to every input DTO. Write the `@SafeUrl` validator from §2 including the SSRF check. Test it with `http://localhost:8080/actuator/env` and `http://169.254.169.254/` — both must be rejected.
+**3. Full validation.** Add constraints to every input DTO. Write the `@SafeUrl` validator from §3 including the SSRF check. Test it with `http://localhost:8080/actuator/env` and `http://169.254.169.254/` — both must be rejected.
 
-**4. ⭐ The global exception handler.** Implement the full `GlobalExceptionHandler` from §3. Then verify each path with curl:
+**4. ⭐ The global exception handler.** Implement the full `GlobalExceptionHandler` from §4. Then verify each path with curl:
 ```bash
 curl -i -X POST localhost:8080/api/v1/monitors -H 'Content-Type: application/json' -d '{"name":"","url":"nope","intervalSeconds":5}'
 ```

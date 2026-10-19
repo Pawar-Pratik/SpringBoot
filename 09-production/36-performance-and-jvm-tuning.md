@@ -187,7 +187,7 @@ Then open in **Eclipse MAT** and run "Leak Suspects." MAT's **dominator tree** i
 ```
 **`ExitOnOutOfMemoryError` matters:** after an `OutOfMemoryError`, some threads have died mid-operation and the application is in an unknown state. **Dying cleanly so the orchestrator restarts you is better than serving corrupted responses.**
 
-**⚠️ And remember: a heap dump contains every password, token and PII value in memory** (Lesson 28 §5). Treat the file as a production secret.
+**⚠️ And remember: a heap dump contains every password, token and PII value in memory** (Lesson 28 §6). Treat the file as a production secret.
 
 **The common leaks in Spring applications:**
 1. **Unbounded caches** — `ConcurrentMapCacheManager` with no eviction (Lesson 33)
@@ -244,7 +244,7 @@ java -XX:SharedArchiveFile=app.jsa -jar vigil.jar
 **What you get:** ~50ms startup (vs ~3s), ~50MB memory (vs ~300MB), a single binary with no JVM.
 
 **What you give up — and this is what interviews probe:**
-- **No dynamic class loading**, so all reflection, proxies and resources must be known at build time. This is why **Spring Boot 3's AOT processing exists**: it computes bean definitions at build time and generates reflection hints (Lesson 04 §Part 2).
+- **No dynamic class loading**, so all reflection, proxies and resources must be known at build time. This is why **Spring Boot 3's AOT processing exists**: it computes bean definitions at build time and generates reflection hints (Lesson 04 §Part 3).
 - **Long builds** — 3–10 minutes, and memory-hungry.
 - **No JIT**, so *peak* throughput is often **lower** than a warmed-up JVM. **Native images start fast and can run slower.**
 - Some libraries need manual hints or don't work at all.

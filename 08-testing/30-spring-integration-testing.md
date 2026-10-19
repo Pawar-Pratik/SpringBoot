@@ -166,7 +166,7 @@ mockMvc.perform(get("/api/v1/monitors").param("status", "DOWN")
 
 ```java
 @DataJpaTest
-@Import(TestcontainersConfig.class)                   // real Postgres, not H2 — see §3
+@Import(TestcontainersConfig.class)                   // real Postgres, not H2 — see §4
 class MonitorRepositoryTest {
 
     @Autowired private MonitorRepository repository;
@@ -567,9 +567,9 @@ class HttpCheckExecutorTest {
 
 **6. Full-stack tests** with `RANDOM_PORT` and `TestRestTemplate` for the create→fetch→update→delete lifecycle. **Then discover the transaction trap:** annotate the test `@Transactional`, create a monitor via HTTP, and confirm the row **survives** after the test. Explain why to yourself.
 
-**7. The security suite** from §5, including cross-tenant 404 tests for every endpoint. **Then delete a tenant filter from one repository method and confirm the test catches it.**
+**7. The security suite** from §6, including cross-tenant 404 tests for every endpoint. **Then delete a tenant filter from one repository method and confirm the test catches it.**
 
-**8. WireMock tests** from §6, including the slow-response timeout proof and the SSRF redirect block.
+**8. WireMock tests** from §7, including the slow-response timeout proof and the SSRF redirect block.
 
 **9. Make the suite fast.** Turn on `logging.level.org.springframework.test.context.cache=DEBUG` and count your contexts. Then reduce the count by consolidating `properties` and `@MockitoBean` usage into the base class. **Record the before/after suite time** — that number is a great thing to mention.
 

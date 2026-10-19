@@ -40,7 +40,7 @@ The prototype-in-a-singleton trap, the `@PostConstruct` proxy trap, and request 
 
 **A Spring singleton is one instance per `ApplicationContext`, not one per JVM.** That's a different thing from the Singleton *design pattern* (a private constructor and a static `getInstance()`). Two contexts in one JVM (common in tests!) mean two instances. Interviewers ask this specifically.
 
-**The consequence you must never forget:** *singleton = shared across every thread.* Everything in Lesson 02 §7 applies. `final` dependencies, no mutable instance state.
+**The consequence you must never forget:** *singleton = shared across every thread.* Everything in Lesson 02 §8 applies. `final` dependencies, no mutable instance state.
 
 **Eager by default,** which is deliberate fail-fast (Lesson 06). You can override:
 
@@ -377,7 +377,7 @@ public ObjectMapper objectMapper() { return new ObjectMapper(); }
 
 **"Give the user a default unless they defined their own."** This is *the* pattern behind "Spring Boot configures everything but I can always override it."
 
-It only works because auto-configuration is evaluated **last** (Lesson 06 §5). By then, all your `@Configuration` and `@Component` beans are registered, so "does one already exist?" is answerable.
+It only works because auto-configuration is evaluated **last** (Lesson 06 §6). By then, all your `@Configuration` and `@Component` beans are registered, so "does one already exist?" is answerable.
 
 **Which produces the #1 conditional-bean gotcha:**
 

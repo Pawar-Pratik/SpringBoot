@@ -456,11 +456,11 @@ fetch('http://localhost:8080/api/v1/monitors')
 
 **5. Add Spring Security and break CORS again.** Add `spring-boot-starter-security` (default config: everything authenticated). Your CORS now fails with 401 on preflight. **Fix it with `.cors(Customizer.withDefaults())`.** You've now personally experienced the single most-asked Spring CORS question.
 
-**6. The request-logging filter** from §3, with health-check skipping and query-string redaction. Verify a request with `?token=secret123` logs `token=***`.
+**6. The request-logging filter** from §4, with health-check skipping and query-string redaction. Verify a request with `?token=secret123` logs `token=***`.
 
 **7. Filter vs interceptor, proven.** Register both with print statements. Request a valid endpoint (both run), a 404 (**filter only**), and `/favicon.ico` (filter only).
 
-**8. `@RequiresPlan` interceptor** from §3 with a fake `SubscriptionService` returning `FREE`. Annotate an endpoint `@RequiresPlan(Plan.PRO)` and confirm 402. Then try to implement the same rule as a filter and notice you'd need a URL map — **that's the justification, felt.**
+**8. `@RequiresPlan` interceptor** from §4 with a fake `SubscriptionService` returning `FREE`. Annotate an endpoint `@RequiresPlan(Plan.PRO)` and confirm 402. Then try to implement the same rule as a filter and notice you'd need a URL map — **that's the justification, felt.**
 
 **9. Rate limiting.** Simplest version first: a `ConcurrentHashMap<String, AtomicInteger>` with a fixed window. Verify the headers and the 429 with `Retry-After`. Then write down why this breaks with three instances — that's your Module 9 to-do.
 

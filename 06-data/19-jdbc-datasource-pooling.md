@@ -407,7 +407,7 @@ CREATE INDEX idx_check_result_monitor_time ON check_result (monitor_id, checked_
 ```
 **That index is not decoration** — every Vigil query filters by monitor and orders by time. Lesson 24 explains why the column order matters.
 
-**3. `JdbcClient` repository.** Implement `CheckResultRepository` from §3 with `findRecent`, `uptimeFor` (using `percentile_cont` for p95), and `countFailing`. **Note that the p95 query is impossible in JPQL** — that's the justification for using JDBC here, felt directly.
+**3. `JdbcClient` repository.** Implement `CheckResultRepository` from §4 with `findRecent`, `uptimeFor` (using `percentile_cont` for p95), and `countFailing`. **Note that the p95 query is impossible in JPQL** — that's the justification for using JDBC here, felt directly.
 
 **4. ⭐ Cause and diagnose pool exhaustion.** This is the most valuable exercise in the lesson.
 ```yaml

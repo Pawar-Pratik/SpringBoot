@@ -55,7 +55,7 @@ T2: read balance=100 ─┤
 T1: write 100-10=90  ─┤
 T2: write 100-20=80  ─┘  ← T1's deduction vanished
 ```
-**Lost update is the one that hurts in real applications** and it's *not* prevented by the default isolation level. It's what `@Version` (optimistic locking) exists for. §5.
+**Lost update is the one that hurts in real applications** and it's *not* prevented by the default isolation level. It's what `@Version` (optimistic locking) exists for. §6.
 
 ### Isolation levels
 
@@ -95,7 +95,7 @@ public void createMonitor(Request req) {
         txManager.rollback(tx);                                    // ROLLBACK
         throw e;
     } catch (Exception checked) {
-        txManager.commit(tx);                                      // ⚠️ COMMIT! see §4
+        txManager.commit(tx);                                      // ⚠️ COMMIT! see §5
         throw checked;
     }
 }
@@ -117,7 +117,7 @@ public class MonitorService {
     public MonitorResponse create(CreateMonitorRequest req) { ... }
 }
 ```
-Reads get the read-only benefits (Lesson 20 §5) and accidental mutations can't be flushed. Writes opt in explicitly.
+Reads get the read-only benefits (Lesson 20 §6) and accidental mutations can't be flushed. Writes opt in explicitly.
 
 ---
 

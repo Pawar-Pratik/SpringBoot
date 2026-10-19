@@ -99,7 +99,7 @@ public MonitorResponse get(UUID id) {
     return mapper.toResponse(m);
 }   // 💥 You just wrote to the database from a GET.
 ```
-Accidental mutation of a managed entity is a silent write. **`@Transactional(readOnly = true)` on read paths prevents this** (§5) — one of the most valuable defaults in this lesson.
+Accidental mutation of a managed entity is a silent write. **`@Transactional(readOnly = true)` on read paths prevents this** (§6) — one of the most valuable defaults in this lesson.
 
 **3. Write-behind: SQL is deferred and batched**
 
@@ -109,7 +109,7 @@ public void createThree() {
     repo.save(new Monitor("a"));
     repo.save(new Monitor("b"));
     repo.save(new Monitor("c"));
-    // no SQL yet (unless the ID generator forces it — see §4)
+    // no SQL yet (unless the ID generator forces it — see §5)
 }   // ← flush at commit: all three INSERTs, possibly batched into one round trip
 ```
 
@@ -208,7 +208,7 @@ FlushModeType.COMMIT  // only at commit
 1. **Transaction commit** — always
 2. **Before executing a JPQL/Criteria query** whose results could be affected by pending changes
 3. **Explicit `em.flush()` / `repository.flush()` / `saveAndFlush()`**
-4. **Sometimes by ID generation** (see §4 — `IDENTITY` forces an immediate insert)
+4. **Sometimes by ID generation** (see §5 — `IDENTITY` forces an immediate insert)
 
 The point of #2 is consistency: if you've changed an entity in memory and then run a query that would match it, Hibernate flushes first so the query sees your change.
 
@@ -261,7 +261,7 @@ Fix: `flush()` after the delete, or reuse the existing row. Knowing *why* it hap
 | `IDENTITY` | `SERIAL`/`AUTO_INCREMENT`; DB assigns on insert | ⚠️ **Disables JDBC batch inserts.** Hibernate must insert immediately to learn the ID, so it can't defer or batch. |
 | `SEQUENCE` | `nextval()`, pre-fetched | ✅ **Best for Postgres/Oracle.** Batching works. Use an allocation size. |
 | `TABLE` | A table simulating a sequence | ❌ Slow, contentious. Avoid. |
-| `UUID` / assigned | Generated in the app | ✅ No DB round trip; but `save()` triggers `merge()` → extra SELECT (§2) |
+| `UUID` / assigned | Generated in the app | ✅ No DB round trip; but `save()` triggers `merge()` → extra SELECT (§3) |
 
 **The `IDENTITY` batching problem is a genuinely valuable thing to know.** You configure `hibernate.jdbc.batch_size=50`, measure no improvement, and conclude batching "doesn't work." It's your ID strategy.
 
@@ -384,7 +384,7 @@ public MonitorResponse get(UUID id) { ... }
 
 Buys you:
 - **Hibernate skips dirty checking** and doesn't take entity snapshots → less memory and CPU on read paths
-- **Accidental mutations aren't flushed** (the §2 trap becomes harmless)
+- **Accidental mutations aren't flushed** (the §3 trap becomes harmless)
 - The JDBC connection is marked read-only, so some databases/proxies can route it to a **read replica**
 
 **Convention worth adopting:** `@Transactional(readOnly = true)` at the *class* level on services, overridden with plain `@Transactional` on write methods. Cheap, and it prevents a whole bug class.
@@ -453,7 +453,7 @@ public void flushDemo() {
 ```
 Match the log markers to the SQL. **Then call `repo.saveAndFlush(...)` instead and note the INSERT moves earlier.**
 
-**6. Reproduce the flush-ordering constraint violation** from §3: delete a monitor and insert a new one with the same unique name in one transaction. Read the exception, then fix it with an explicit `flush()`.
+**6. Reproduce the flush-ordering constraint violation** from §4: delete a monitor and insert a new one with the same unique name in one transaction. Read the exception, then fix it with an explicit `flush()`.
 
 **7. `LazyInitializationException`, then three fixes.** With `open-in-view: false`, return a DTO built from `monitor.getOrganization().getName()` in a non-transactional method. Read the exception. Then fix it:
 - `@Transactional(readOnly = true)` with mapping inside

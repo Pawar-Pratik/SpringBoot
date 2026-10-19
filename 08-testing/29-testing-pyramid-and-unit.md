@@ -89,7 +89,7 @@ class UptimeCalculatorTest {
 
 **Notice what's absent: no `@SpringBootTest`, no `@Mock`, no annotations at all.** This runs in under a millisecond. And notice the third test — `0%` vs `unknown` for a monitor with no data is a real product decision, and encoding it in a test is how that decision survives.
 
-**This is why constructor injection matters** (Lesson 07 §2): `new UptimeCalculator()` is only possible because dependencies are explicit.
+**This is why constructor injection matters** (Lesson 07 §3): `new UptimeCalculator()` is only possible because dependencies are explicit.
 
 ### JUnit 5 essentials
 
@@ -228,7 +228,7 @@ class IncidentServiceTest {
 }
 ```
 
-**Note `@InjectMocks` is absent, deliberately** (Lesson 07 §2): explicit construction means adding a dependency breaks compilation rather than silently injecting null.
+**Note `@InjectMocks` is absent, deliberately** (Lesson 07 §3): explicit construction means adding a dependency breaks compilation rather than silently injecting null.
 
 **Note the injected `Clock`.** Any code calling `Instant.now()` directly is untestable for time-dependent behaviour. Inject a `Clock`, use `Clock.fixed(...)` in tests, and time becomes an input. **This is a small design habit with a large testing payoff** and a nice thing to demonstrate.
 

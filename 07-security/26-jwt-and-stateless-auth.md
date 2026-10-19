@@ -96,7 +96,7 @@ eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI3ZjNhIiwib3JnIjoiYTFiMiJ9.SflKxw
 | **HS256** | Symmetric (HMAC-SHA256) | One service signs and verifies. Simple. **The secret must be ≥256 bits.** |
 | **RS256** | Asymmetric (RSA) | Multiple services verify. **They only need the public key** — they cannot mint tokens. |
 | **ES256** | Asymmetric (ECDSA) | Same as RS256, smaller signatures, faster. Preferred over RSA for new systems. |
-| `none` | ❌ | **Never.** See §3. |
+| `none` | ❌ | **Never.** See §4. |
 
 **The decision rule:** **HS256** if one service both issues and validates. **RS256/ES256** if multiple services validate, because distributing a public key is safe while distributing a shared secret means any service could forge tokens for any other. **That's the real argument** — not performance.
 
@@ -146,7 +146,7 @@ A 30-day access token is a 30-day breach window with no way to close it. **Acces
 
 ### ❌ Mistake 6 — storing tokens in `localStorage`
 
-Covered in §5 — the most-debated point in the topic and worth getting right.
+Covered in §6 — the most-debated point in the topic and worth getting right.
 
 ---
 
@@ -426,7 +426,7 @@ GET  /api/v1/auth/me          → current user + org + roles
 
 **3. The refresh-token table** with `token_hash`, `family_id`, `expires_at`, `revoked_at`, `user_id`. Index `token_hash`. Write the Flyway migration.
 
-**4. Rotation with reuse detection** exactly as in §4.
+**4. Rotation with reuse detection** exactly as in §5.
 
 **5. Wire up the resource server** with `oauth2ResourceServer` and a `JwtAuthenticationConverter`. **Do not write your own JWT filter** — but *do* read `BearerTokenAuthenticationFilter`'s source to see what you're not writing.
 

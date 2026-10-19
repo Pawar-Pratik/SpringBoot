@@ -76,7 +76,7 @@ public class IncidentService {
 }
 ```
 
-Legitimate but rare. The common modern alternative is `ObjectProvider<T>` (§5).
+Legitimate but rare. The common modern alternative is `ObjectProvider<T>` (§6).
 
 ---
 
@@ -90,7 +90,7 @@ Only constructor injection lets fields be `final`. `final` means:
 - assigned exactly once, guaranteed by the compiler
 - **safely published across threads** — the JVM's final-field semantics guarantee other threads see the fully constructed value
 
-Field injection can't use `final` (the field is set *after* construction), so every dependency is mutable for the object's lifetime. Since beans are singletons shared across all request threads (Lesson 02 §7), immutability isn't a style preference — it's a correctness property.
+Field injection can't use `final` (the field is set *after* construction), so every dependency is mutable for the object's lifetime. Since beans are singletons shared across all request threads (Lesson 02 §8), immutability isn't a style preference — it's a correctness property.
 
 ### Reason 2 — The object is never in an invalid state
 
@@ -145,7 +145,7 @@ This is the most sophisticated of the four arguments: **constructor injection pr
 
 ### And the bonus reason: circular dependencies fail loudly
 
-Constructor injection makes a cycle **impossible to construct**, so Spring throws at startup. Field injection *allows* cycles (Spring can set fields after both objects exist), so a bad design silently survives into production. See §6.
+Constructor injection makes a cycle **impossible to construct**, so Spring throws at startup. Field injection *allows* cycles (Spring can set fields after both objects exist), so a bad design silently survives into production. See §7.
 
 ### The counterargument, honestly
 

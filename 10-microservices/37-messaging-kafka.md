@@ -159,7 +159,7 @@ public class CheckResultProducer {
 
 ### `enable.idempotence=true` — set this
 
-Without it, a producer retry after a network timeout can write the message **twice** (the first write succeeded; the ack was lost). With it, the producer attaches a sequence number and the broker deduplicates. **This gives you exactly-once *producing*** — which is a different and much easier problem than exactly-once *processing* (§6).
+Without it, a producer retry after a network timeout can write the message **twice** (the first write succeeded; the ack was lost). With it, the producer attaches a sequence number and the broker deduplicates. **This gives you exactly-once *producing*** — which is a different and much easier problem than exactly-once *processing* (§7).
 
 **Modern Kafka clients default `enable.idempotence` to true**, but set it explicitly: it documents intent and protects you if config elsewhere disables it.
 
@@ -173,7 +173,7 @@ Setting `linger.ms=10` makes the producer wait up to 10ms to batch messages. **I
 kafkaTemplate.send(...);                                    // async — fast, fire and forget
 kafkaTemplate.send(...).get(5, TimeUnit.SECONDS);           // ⚠️ blocking — kills throughput
 ```
-**Never block on send in a request path.** Use the callback. If you need "the message is definitely published before I respond," you don't want Kafka in that path — you want the **outbox pattern** (§4).
+**Never block on send in a request path.** Use the callback. If you need "the message is definitely published before I respond," you don't want Kafka in that path — you want the **outbox pattern** (§5).
 
 ---
 
@@ -233,7 +233,7 @@ public class OutboxRelay {
 }
 ```
 
-**Why this is correct:** "the state changed" and "the message is owed" are the same database transaction, so they're atomic. If the relay crashes, unsent rows are still there and get retried. **The consequence: at-least-once delivery, so consumers must be idempotent** (§6).
+**Why this is correct:** "the state changed" and "the message is owed" are the same database transaction, so they're atomic. If the relay crashes, unsent rows are still there and get retried. **The consequence: at-least-once delivery, so consumers must be idempotent** (§7).
 
 **Production alternative worth naming: Change Data Capture with Debezium** — it tails the database's write-ahead log and publishes changes to Kafka with no polling and no application code. **It's the outbox pattern implemented by reading the transaction log**, which means it can't miss anything. Mentioning Debezium in a dual-write discussion is a strong signal.
 
@@ -399,7 +399,7 @@ public class CheckResultConsumer {
 
 **The dedupe record and the business change must be in the same transaction.** Otherwise you can apply the change, crash before recording it, and apply it again on redelivery. **Same insight as the outbox, viewed from the consuming side** — and noticing that symmetry is the mark of having understood both.
 
-**Better still, make the operation naturally idempotent** (Lesson 34 §5):
+**Better still, make the operation naturally idempotent** (Lesson 34 §6):
 ```sql
 INSERT INTO check_result (id, monitor_id, checked_at, status)
 VALUES (?, ?, ?, ?)

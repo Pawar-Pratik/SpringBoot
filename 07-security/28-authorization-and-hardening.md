@@ -124,7 +124,7 @@ public class MonitorService {
 
 **`@PostAuthorize` and `@PostFilter` caveats:**
 - `@PostAuthorize` runs **after** the method — so any side effects already happened. Never use it on a method that writes.
-- `@PostFilter` loads everything then discards — so it's wrong for pagination (you'd return fewer than `size` items) and wasteful on large sets. **Filter in the query instead** (§3).
+- `@PostFilter` loads everything then discards — so it's wrong for pagination (you'd return fewer than `size` items) and wasteful on large sets. **Filter in the query instead** (§4).
 
 **`@Secured` and JSR-250 `@RolesAllowed`** exist but only do role checks with no SpEL. Use `@PreAuthorize`.
 
@@ -183,7 +183,7 @@ Readable and reusable — but it costs an extra query, and it's a *separate* ste
 
 ### Layer 4 — Data-level: the safety net
 
-From Lesson 24 §4: a Hibernate `@Filter`, an unconditional `Specification` predicate, and **Postgres Row-Level Security**.
+From Lesson 24 §5: a Hibernate `@Filter`, an unconditional `Specification` predicate, and **Postgres Row-Level Security**.
 
 ```sql
 ALTER TABLE monitor ENABLE ROW LEVEL SECURITY;
@@ -287,7 +287,7 @@ Covered above. **The checklist:**
 Rate limiting (Lesson 17), lockout after failed logins, MFA support, secure password reset (single-use, short-lived, `SecureRandom` tokens; don't reveal whether the email exists).
 
 ### A05 — Security Misconfiguration
-- Actuator: **expose only `health` and `info` publicly**; everything else authenticated (§5)
+- Actuator: **expose only `health` and `info` publicly**; everything else authenticated (§6)
 - `server.error.include-stacktrace=never` (Lesson 16)
 - Swagger UI disabled or authenticated for internal APIs (Lesson 17)
 - No default credentials; no debug flags; `@EnableWebSecurity(debug=true)` off
@@ -317,7 +317,7 @@ Log authentication successes and failures, authorization denials, and admin acti
 
 ### A10 — SSRF
 
-**Vigil is an SSRF magnet by design** — its whole purpose is fetching user-supplied URLs. Covered in Lesson 16 §2, and worth restating because it's the most project-specific risk you have:
+**Vigil is an SSRF magnet by design** — its whole purpose is fetching user-supplied URLs. Covered in Lesson 16 §3, and worth restating because it's the most project-specific risk you have:
 
 - Validate the scheme (http/https only)
 - **Block private, loopback, and link-local addresses** — especially `169.254.169.254`, the cloud metadata endpoint that hands out IAM credentials

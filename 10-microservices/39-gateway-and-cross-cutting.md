@@ -34,7 +34,7 @@ Each service implements:                · rate limiting (globally)
 1. **One entry point** — clients don't need to know your topology, so you can re-split services without breaking them
 2. **Cross-cutting policy in one place** — auth, rate limiting, CORS, TLS implemented once
 3. **Topology decoupling** — extract or merge a service and only the gateway's routes change
-4. **Aggregation** — one client call can fan out to several services (though see BFF, §4)
+4. **Aggregation** — one client call can fan out to several services (though see BFF, §5)
 
 **And the costs, which you must be able to name:**
 1. **A single point of failure.** If the gateway is down, everything is down. **It must be more available than anything behind it** — multiple replicas, aggressive health checks, and no business logic.
@@ -53,7 +53,7 @@ Each service implements:                · rate limiting (globally)
 </dependency>
 ```
 
-**Important architectural note: Spring Cloud Gateway is built on WebFlux, not MVC.** That's the correct choice for a gateway — it's a pure I/O-bound proxy holding many concurrent connections with almost no business logic, which is exactly WebFlux's sweet spot (Lesson 18 §4). **Consequence: never put blocking code in a gateway filter.** One blocking call freezes an event-loop thread and, with only a few of them, the whole gateway.
+**Important architectural note: Spring Cloud Gateway is built on WebFlux, not MVC.** That's the correct choice for a gateway — it's a pure I/O-bound proxy holding many concurrent connections with almost no business logic, which is exactly WebFlux's sweet spot (Lesson 18 §5). **Consequence: never put blocking code in a gateway filter.** One blocking call freezes an event-loop thread and, with only a few of them, the whole gateway.
 
 > **Boot 4 note:** Spring Cloud Gateway now also ships an **MVC (servlet) variant** (`spring-cloud-starter-gateway-mvc`), which pairs well with virtual threads. Worth knowing both exist; the reactive one remains the default for high-connection-count edges.
 
@@ -106,7 +106,7 @@ spring:
 
 **Two details in that config worth highlighting:**
 
-**`methods: GET` on the retry filter is essential.** A gateway retrying a POST after a timeout creates a duplicate — the request may well have succeeded and only the response was lost (Lesson 34 §5). **Only retry idempotent methods, or require an idempotency key.** A gateway configured to retry all methods is a duplicate-creation machine, and it's a genuinely common misconfiguration.
+**`methods: GET` on the retry filter is essential.** A gateway retrying a POST after a timeout creates a duplicate — the request may well have succeeded and only the response was lost (Lesson 34 §6). **Only retry idempotent methods, or require an idempotency key.** A gateway configured to retry all methods is a duplicate-creation machine, and it's a genuinely common misconfiguration.
 
 **Different rate limits per route.** The authenticated API gets 20/s per key; public status pages get 5/s per IP. **One global limit is either too loose for public endpoints or too tight for paying customers.**
 
@@ -157,9 +157,9 @@ public class CorrelationIdGatewayFilter implements GlobalFilter {
 }
 ```
 
-**The header-stripping lines are a security control, not hygiene.** If downstream services trust `X-User-Id`, and the gateway forwards a client-supplied one, **any client can impersonate any user** — a complete authentication bypass in three characters of missing code. **The gateway must remove every internal header before setting its own.** (Lesson 38 §5.)
+**The header-stripping lines are a security control, not hygiene.** If downstream services trust `X-User-Id`, and the gateway forwards a client-supplied one, **any client can impersonate any user** — a complete authentication bypass in three characters of missing code. **The gateway must remove every internal header before setting its own.** (Lesson 38 §6.)
 
-**And note `contextWrite` rather than `MDC.put`.** In WebFlux, a request hops threads between operators, so `ThreadLocal` doesn't follow it — you use Reactor's `Context` (Lesson 18 §2). Sixth appearance of the ThreadLocal lesson, in its reactive form.
+**And note `contextWrite` rather than `MDC.put`.** In WebFlux, a request hops threads between operators, so `ThreadLocal` doesn't follow it — you use Reactor's `Context` (Lesson 18 §3). Sixth appearance of the ThreadLocal lesson, in its reactive form.
 
 ---
 
@@ -203,7 +203,7 @@ spring.security.oauth2.resourceserver.jwt.issuer-uri: https://auth.vigil.io
 
 **⭐ And the crucial distinction: authentication at the edge, authorization in the service.**
 
-The gateway can check "is this a valid token?" It cannot check "may *this* user delete *this* monitor?" — that requires the data (Lesson 28 §3). **Object-level authorization must live in the service that owns the data.** A gateway that tries to do authorization either duplicates business rules or performs data lookups it shouldn't.
+The gateway can check "is this a valid token?" It cannot check "may *this* user delete *this* monitor?" — that requires the data (Lesson 28 §4). **Object-level authorization must live in the service that owns the data.** A gateway that tries to do authorization either duplicates business rules or performs data lookups it shouldn't.
 
 **This is the single most important point in the lesson**, because getting it wrong produces either a gateway full of business logic or services with no authorization at all.
 
@@ -259,7 +259,7 @@ WITH a mesh: a sidecar proxy handles it, transparently
 **The costs, and they're real:**
 - **Significant operational complexity.** Istio in particular has a reputation for being a system unto itself.
 - A sidecar per pod: extra memory (~50–100MB) and CPU, plus a latency hop each way
-- **Two layers of retries and timeouts** — application *and* mesh — which interact confusingly. Retry amplification (Lesson 34 §2) gets worse if both retry.
+- **Two layers of retries and timeouts** — application *and* mesh — which interact confusingly. Retry amplification (Lesson 34 §3) gets worse if both retry.
 - Another component in every request path to debug
 
 **The calibrated answer:** *"A mesh is worth it when you have many services, especially polyglot ones, and need uniform mTLS and traffic policy without touching application code. For a handful of Spring services, Resilience4j plus Kubernetes Services plus Micrometer tracing covers most of it at far lower operational cost. And if you adopt a mesh, you should move resilience policy **out** of the application rather than having both layers retry — the double-retry interaction is a genuine trap."*
@@ -272,7 +272,7 @@ WITH a mesh: a sidecar proxy handles it, transparently
 
 **The core problem: services deploy independently, so two versions coexist. Every change must be compatible with the version currently running.**
 
-**Expand/contract applies to APIs, exactly as it does to database columns** (Lesson 24 §3):
+**Expand/contract applies to APIs, exactly as it does to database columns** (Lesson 24 §4):
 
 ```
 Renaming a response field across services:
@@ -282,9 +282,9 @@ Deploy 2: consumers switch to reading `title`
 Deploy 3: (once no consumer reads `name`) the provider removes it
 ```
 
-**API versioning across services** — the same rules as Lesson 16 §4, plus one addition: **internal APIs can evolve faster than public ones, because you know and control all consumers.** For internal service-to-service contracts, additive-only evolution plus contract tests is usually sufficient and cheaper than maintaining `/v1` and `/v2` in parallel.
+**API versioning across services** — the same rules as Lesson 16 §5, plus one addition: **internal APIs can evolve faster than public ones, because you know and control all consumers.** For internal service-to-service contracts, additive-only evolution plus contract tests is usually sufficient and cheaper than maintaining `/v1` and `/v2` in parallel.
 
-**Contract tests are what make independent deploys safe** (Lesson 31 §2). Without them, "independent deployability" is a slogan — you'll coordinate anyway, out of fear.
+**Contract tests are what make independent deploys safe** (Lesson 31 §3). Without them, "independent deployability" is a slogan — you'll coordinate anyway, out of fear.
 
 **Deployment ordering — the rule worth memorizing:**
 
@@ -314,9 +314,9 @@ Adding a new event type:            deploy CONSUMERS first (so they're ready to 
 | Config error breaks all routes | Version and test the config; canary the gateway itself |
 | **Retries on non-idempotent methods** | `methods: GET` only, or require an idempotency key |
 
-**The bulkhead-per-route point deserves emphasis:** without it, a slow `vigil-checker` consumes all the gateway's connection capacity and **requests to `vigil-api` fail too** — the gateway becomes the mechanism by which one service's problems become everyone's. **That's the same failure isolation argument as Lesson 34 §4, applied one layer up**, and it's a genuinely good observation.
+**The bulkhead-per-route point deserves emphasis:** without it, a slow `vigil-checker` consumes all the gateway's connection capacity and **requests to `vigil-api` fail too** — the gateway becomes the mechanism by which one service's problems become everyone's. **That's the same failure isolation argument as Lesson 34 §5, applied one layer up**, and it's a genuinely good observation.
 
-**Health-checking must be right too:** the gateway should route only to *ready* backends (Kubernetes readiness probes do this for you — Lesson 35 §2.1), and its **own** health check must not depend on all backends being healthy, or one bad service takes the gateway out of rotation and breaks everything.
+**Health-checking must be right too:** the gateway should route only to *ready* backends (Kubernetes readiness probes do this for you — Lesson 35 §3.1), and its **own** health check must not depend on all backends being healthy, or one bad service takes the gateway out of rotation and breaks everything.
 
 ---
 
@@ -324,7 +324,7 @@ Adding a new event type:            deploy CONSUMERS first (so they're ready to 
 
 **1. Create `vigil-gateway`** with `spring-cloud-starter-gateway`, routes for `/api/v1/**` → api, `/status/**` → api, and `/internal/**` → checker (header-gated).
 
-**2. JWT validation at the edge** with `oauth2-resource-server`, plus the `CorrelationIdGatewayFilter` from §2 that sets identity headers **and strips client-supplied ones.**
+**2. JWT validation at the edge** with `oauth2-resource-server`, plus the `CorrelationIdGatewayFilter` from §3 that sets identity headers **and strips client-supplied ones.**
 
 **3. ⭐ Prove the header-injection vulnerability.** First, have `vigil-api` trust `X-User-Id` and have the gateway forward headers without stripping. Then:
 ```bash
@@ -333,7 +333,7 @@ curl -H "Authorization: Bearer $USER_TOKEN" -H "X-User-Id: <admin-uuid>" \
 ```
 **Confirm you get admin access as a normal user.** Then add the stripping filter and confirm it's blocked. **Then implement Model B** — the service validates the JWT itself — and confirm the attack fails even with header stripping removed. **You've just demonstrated defence in depth on your own system, which is a genuinely compelling thing to describe.**
 
-**4. Redis rate limiting** with different limits per route: 20/s per API key for authenticated routes, 5/s per IP for public status pages. Verify with `hey -n 100 -c 20` and confirm 429s with `Retry-After`. **Then run two gateway replicas and confirm the limit is enforced *globally*** — that's why the limiter is Redis-backed rather than in-memory (Lesson 17 §4).
+**4. Redis rate limiting** with different limits per route: 20/s per API key for authenticated routes, 5/s per IP for public status pages. Verify with `hey -n 100 -c 20` and confirm 429s with `Retry-After`. **Then run two gateway replicas and confirm the limit is enforced *globally*** — that's why the limiter is Redis-backed rather than in-memory (Lesson 17 §5).
 
 **5. Circuit breaker with a fallback.** Stop `vigil-api` and confirm requests get the fallback response quickly rather than hanging. Watch the circuit state in `/actuator/health`.
 

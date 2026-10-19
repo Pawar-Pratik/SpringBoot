@@ -54,7 +54,7 @@ public @interface EnableAutoConfiguration { }
 
 ## 3. What `AutoConfigurationImportSelector` does
 
-It's a `DeferredImportSelector` — "deferred" meaning **it runs last**, after all your own configuration classes are processed. That ordering is what makes `@ConditionalOnMissingBean` work (Lesson 08 §3).
+It's a `DeferredImportSelector` — "deferred" meaning **it runs last**, after all your own configuration classes are processed. That ordering is what makes `@ConditionalOnMissingBean` work (Lesson 08 §4).
 
 Its algorithm:
 
@@ -399,7 +399,7 @@ Consumers just add the dependency and set properties. And if they define their o
 
 **3. Break it on purpose.** Exclude `JacksonAutoConfiguration` and hit an endpoint returning an object. Read the failure. Then exclude `DataSourceAutoConfiguration` while `data-jpa` is on the classpath and read *that* failure. **Both errors are informative — practise reading them.**
 
-**4. ⭐ Build the starter.** Follow §6 fully, in the same project for simplicity (`com.vigil.starter.notification`). Then:
+**4. ⭐ Build the starter.** Follow §7 fully, in the same project for simplicity (`com.vigil.starter.notification`). Then:
 - Verify the default `LOG` channel is created with no properties set.
 - Switch `type=SLACK`, verify the Slack channel is created instead.
 - Define your **own** `NotificationChannel` bean in the app and verify *both* auto-configured beans back off. Confirm via `/actuator/beans`.

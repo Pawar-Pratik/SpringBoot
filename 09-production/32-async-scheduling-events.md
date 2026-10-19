@@ -41,11 +41,11 @@ public class NotificationService {
 1. **`@EnableAsync` is required.** Without it, `@Async` does nothing — no error, method runs synchronously.
 2. **It's proxy-based** (Lesson 09). Self-invocation → runs synchronously, silently. `private`/`final` → silently ignored.
 3. **Return `void` or `CompletableFuture<T>`.** Any other return type gets `null` immediately, because the proxy returns before the method finishes. Returning `String` from an `@Async` method is a bug that compiles.
-4. **Exceptions in `void` async methods vanish** unless you install an `AsyncUncaughtExceptionHandler`. §1.2.
+4. **Exceptions in `void` async methods vanish** unless you install an `AsyncUncaughtExceptionHandler`. §2.2.
 5. **`ThreadLocal` context doesn't propagate** — `SecurityContextHolder`, MDC, request scope, transactions. Fourth appearance of this lesson.
-6. **Always name the executor.** §1.1.
+6. **Always name the executor.** §2.1.
 
-### 1.1 The default executor is a production hazard
+### 2.1 The default executor is a production hazard
 
 Without configuration, Boot's `@Async` uses a `SimpleAsyncTaskExecutor`, which **creates a new thread per invocation with no pooling and no bound.**
 
@@ -71,7 +71,7 @@ public class AsyncConfig implements AsyncConfigurer {
         executor.setRejectedExecutionHandler(new ThreadPoolExecutor.CallerRunsPolicy());
         executor.setWaitForTasksToCompleteOnShutdown(true);        // ★ graceful shutdown
         executor.setAwaitTerminationSeconds(30);
-        executor.setTaskDecorator(new ContextPropagatingTaskDecorator());   // §1.3
+        executor.setTaskDecorator(new ContextPropagatingTaskDecorator());   // §2.3
         executor.initialize();
         return executor;
     }
@@ -115,7 +115,7 @@ public class AsyncConfig implements AsyncConfigurer {
 
 **`CallerRunsPolicy` is usually right** because it applies backpressure automatically: when the pool is saturated, the producer is forced to do the work itself and therefore stops producing. **But know the caveat:** if the caller is a Tomcat request thread, you've just made a request thread do background work — so it's excellent for internal producers and questionable at the HTTP boundary.
 
-### 1.2 Exception handling
+### 2.2 Exception handling
 
 ```java
 @Async void fireAndForget() { throw new RuntimeException("gone forever"); }
@@ -128,7 +128,7 @@ tracked().exceptionally(ex -> { log.error("failed", ex); return Result.failed();
 ```
 With a `CompletableFuture`, the exception is captured and surfaces on `get()`/`join()`/`exceptionally()`.
 
-### 1.3 Context propagation — the ThreadLocal problem, solved
+### 2.3 Context propagation — the ThreadLocal problem, solved
 
 ```java
 public class ContextPropagatingTaskDecorator implements TaskDecorator {
@@ -203,7 +203,7 @@ fixedRate  = 10s:   [--run 15s--]
                     If a run exceeds the period, executions QUEUE UP.
 ```
 
-**Use `fixedDelay` unless you specifically need a fixed cadence.** With `fixedRate` and a task that occasionally runs long, invocations queue and — combined with the single-threaded default (§2.1) — the scheduler falls permanently behind. **This is a real production failure mode.**
+**Use `fixedDelay` unless you specifically need a fixed cadence.** With `fixedRate` and a task that occasionally runs long, invocations queue and — combined with the single-threaded default (§3.1) — the scheduler falls permanently behind. **This is a real production failure mode.**
 
 **Cron format is Spring-specific: 6 fields, seconds first.**
 ```
@@ -216,7 +216,7 @@ second minute hour day-of-month month day-of-week
 
 Spring also provides macros: `@Scheduled(cron = "@daily")`, `"@hourly"`, `"@midnight"`.
 
-### 2.1 The single-thread default — a genuine trap
+### 3.1 The single-thread default — a genuine trap
 
 **By default, ALL `@Scheduled` methods in your application share ONE thread.**
 
@@ -266,7 +266,7 @@ void dispatchDueChecks() {
 }
 ```
 
-### 2.2 THE MULTI-INSTANCE PROBLEM
+### 3.2 THE MULTI-INSTANCE PROBLEM
 
 **This is the most important thing in this lesson.**
 
@@ -453,7 +453,7 @@ public class IncidentListener {
 
 ### Why use events at all
 
-**1. Breaking circular dependencies** (Lesson 07 §6). `MonitorService` no longer needs to know `IncidentService` exists.
+**1. Breaking circular dependencies** (Lesson 07 §7). `MonitorService` no longer needs to know `IncidentService` exists.
 
 **2. Open/closed extension.** Adding "also update the status page cache when a monitor goes down" means adding a listener — no existing class changes.
 
@@ -463,7 +463,7 @@ public class IncidentListener {
 
 ### `@TransactionalEventListener` — the most useful annotation here
 
-From Lesson 23 §6, and it deserves restating because it solves a real correctness problem:
+From Lesson 23 §7, and it deserves restating because it solves a real correctness problem:
 
 ```java
 @Component
@@ -580,7 +580,7 @@ SELECT claimed_by, count(*) FROM monitor GROUP BY claimed_by;
 - Set `core=2, max=50, queue=10000` and submit 1,000 tasks → **only 2 threads ever run.** Then reduce the queue to 10 and watch it scale to 50.
 - Remove `MDC.clear()` from the `TaskDecorator` → watch correlation IDs bleed between tasks.
 
-**10. Verify graceful shutdown.** With `waitForTasksToCompleteOnShutdown(true)`, submit a long task and send SIGTERM. Confirm it finishes. Then set it `false` and confirm it's abandoned mid-flight. **That's the difference between a clean deploy and lost work** (Lesson 08 §2).
+**10. Verify graceful shutdown.** With `waitForTasksToCompleteOnShutdown(true)`, submit a long task and send SIGTERM. Confirm it finishes. Then set it `false` and confirm it's abandoned mid-flight. **That's the difference between a clean deploy and lost work** (Lesson 08 §3).
 
 ### Explain out loud (60s)
 

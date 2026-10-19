@@ -57,7 +57,7 @@ Spring's startup has **two distinct phases**, and knowing they're separate expla
 
 | Behaviour | Because definitions and instances are separate phases |
 |---|---|
-| A later `@Bean` can **override** an earlier one | Definitions are registered into a map — same name replaces (and Boot disables this by default, see §6) |
+| A later `@Bean` can **override** an earlier one | Definitions are registered into a map — same name replaces (and Boot disables this by default, see §7) |
 | `@ConditionalOnMissingBean` works at all | Conditions are evaluated during definition registration, so it can ask "was a definition already registered?" |
 | `BeanFactoryPostProcessor` can rewrite config | It runs between the two phases, on definitions |
 | `BeanPostProcessor` can return a **proxy** | It runs during phase 2, on instances |
@@ -506,7 +506,7 @@ In `BeanPostProcessor.postProcessAfterInitialization`, i.e. *after* initializati
 A bean that produces another bean, for complex construction. `getBean("name")` returns the product; `getBean("&name")` returns the factory. Spring Data uses `FactoryBean`s to create repository implementations for your interfaces.
 
 **Q11. Walk me through Spring Boot startup.**
-Give the sequence from §5, and make sure you hit: application-type deduction from the classpath, environment/property-source preparation, the definition phase (component scan → `@Import`/`@Bean` → auto-config's `ImportSelector` evaluated **last** so `@ConditionalOnMissingBean` works), then the instantiation phase with post-processors and proxy creation, then web server start, then `ApplicationReadyEvent`.
+Give the sequence from §6, and make sure you hit: application-type deduction from the classpath, environment/property-source preparation, the definition phase (component scan → `@Import`/`@Bean` → auto-config's `ImportSelector` evaluated **last** so `@ConditionalOnMissingBean` works), then the instantiation phase with post-processors and proxy creation, then web server start, then `ApplicationReadyEvent`.
 
 ---
 

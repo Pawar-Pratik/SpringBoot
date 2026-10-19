@@ -22,7 +22,7 @@ Which makes the whole lesson a question of evidence. Extract a service when you 
 
 | | Monolith | Microservices |
 |---|---|---|
-| A cross-entity change | **One ACID transaction** | A saga with compensation (§4) |
+| A cross-entity change | **One ACID transaction** | A saga with compensation (§5) |
 | Calling another module | A method call: fast, typed, reliable | A network call: slow, untyped at runtime, can fail |
 | Refactoring across a boundary | The compiler finds every caller | **Coordinated deploys across teams** |
 | Debugging a request | One stack trace | Distributed tracing, and hope you have it |
@@ -194,7 +194,7 @@ CheckerClient checkerClient(RestClient.Builder builder) {
 }
 ```
 
-**Spring's HTTP Interfaces replace Feign** in modern Spring (Lesson 18 §5), and every inter-service client needs timeouts, a circuit breaker and a bulkhead (Lesson 34). **A service-to-service call without a timeout is how one service's slowness becomes a cluster-wide outage.**
+**Spring's HTTP Interfaces replace Feign** in modern Spring (Lesson 18 §6), and every inter-service client needs timeouts, a circuit breaker and a bulkhead (Lesson 34). **A service-to-service call without a timeout is how one service's slowness becomes a cluster-wide outage.**
 
 ### gRPC — know when it wins
 
@@ -300,7 +300,7 @@ QuotaReserved → MonitorCreated → CheckScheduled → QuotaConfirmed
 ✅ ONE service owning organizations, quotas and monitors → one ACID transaction
 ```
 
-**If two things must change atomically, they belong in the same service.** That's the aggregate rule (§2) applied to service boundaries. **"I'd redraw the boundary rather than write a saga" is frequently the correct and more impressive answer**, and Vigil's split deliberately avoids sagas: orgs, quotas, monitors and incidents are all in `vigil-api` precisely so quota enforcement is one transaction.
+**If two things must change atomically, they belong in the same service.** That's the aggregate rule (§3) applied to service boundaries. **"I'd redraw the boundary rather than write a saga" is frequently the correct and more impressive answer**, and Vigil's split deliberately avoids sagas: orgs, quotas, monitors and incidents are all in `vigil-api` precisely so quota enforcement is one transaction.
 
 ### Querying across services
 
@@ -347,7 +347,7 @@ Options: forward the original JWT (simple; every service validates it), or the g
 Non-negotiable (Lesson 35). Without it, debugging a multi-service request is guesswork.
 
 ### The database-per-service migration problem
-Each service owns its schema and its migrations. But **you must still coordinate breaking changes across services** — expand/contract applies to *API* contracts too (Lesson 24 §3), not just database columns. **Contract tests are what make that safe** (Lesson 31).
+Each service owns its schema and its migrations. But **you must still coordinate breaking changes across services** — expand/contract applies to *API* contracts too (Lesson 24 §4), not just database columns. **Contract tests are what make that safe** (Lesson 31).
 
 ---
 
@@ -412,7 +412,7 @@ Extract vigil-checker with its own database. Communicate via Kafka.
 - Keep the monolith and use a bulkhead: simpler, but caps checker scale at
   the API's pod count and still shares the connection pool
 - Extract organizations/users too: REJECTED — quota enforcement must be
-  transactional with monitor creation, so a saga would be required. See §4.
+  transactional with monitor creation, so a saga would be required. See §5.
 ```
 
 **An ADR like that is one of the most persuasive artifacts a portfolio project can contain.** It proves you can reason about trade-offs, not just wire up frameworks. **Interviewers read these.**

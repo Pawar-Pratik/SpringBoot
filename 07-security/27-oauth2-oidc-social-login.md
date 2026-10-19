@@ -23,7 +23,7 @@ The access token says what its bearer may do, for an audience that isn't you. Th
 
 **OAuth2 was never designed for login.** It was designed so that a photo-printing site could access your Google Photos **without you giving it your Google password.** That's the actual problem: delegated access with scoped permissions and no credential sharing.
 
-Then everyone started using it for login anyway, doing it inconsistently and often insecurely (an access token proves you can *call an API*, not who you *are* — see §5). So **OIDC was standardized in 2014** to add a proper identity layer: an ID token with standard claims, a `/userinfo` endpoint, and discovery.
+Then everyone started using it for login anyway, doing it inconsistently and often insecurely (an access token proves you can *call an API*, not who you *are* — see §6). So **OIDC was standardized in 2014** to add a proper identity layer: an ID token with standard claims, a `/userinfo` endpoint, and discovery.
 
 > **The soundbite:** *"OAuth2 is about permissions, OIDC is about identity. 'Sign in with Google' is OIDC, which is built on OAuth2's authorization code flow."* That single sentence resolves the confusion most candidates display.
 
@@ -164,7 +164,7 @@ No user, no browser, no redirect. **This is how Vigil's check-worker service aut
 // ❌ WRONG
 User user = userRepository.findByEmail(idToken.getEmail()).orElseGet(() -> createUser(...));
 ```
-Emails change. Emails are reassigned (a corporate Google Workspace account can be deleted and recreated for a different person). And **on some providers, email isn't verified** — which makes it an account-takeover vector (§5). The `(iss, sub)` pair is the stable, provider-guaranteed identifier.
+Emails change. Emails are reassigned (a corporate Google Workspace account can be deleted and recreated for a different person). And **on some providers, email isn't verified** — which makes it an account-takeover vector (§6). The `(iss, sub)` pair is the stable, provider-guaranteed identifier.
 
 ```java
 // ✅ RIGHT
@@ -327,7 +327,7 @@ public class VigilOidcUserService extends OidcUserService {
 }
 ```
 
-**The `.filter(User::isEmailVerified)` on the linking path is the subtle one:** linking a federated identity to an existing local account by email is only safe if *both* sides verified that email. Otherwise you've built the takeover from §5 in reverse. **This is exactly the kind of detail that separates a working implementation from a correct one.**
+**The `.filter(User::isEmailVerified)` on the linking path is the subtle one:** linking a federated identity to an existing local account by email is only safe if *both* sides verified that email. Otherwise you've built the takeover from §6 in reverse. **This is exactly the kind of detail that separates a working implementation from a correct one.**
 
 ### Bridging OAuth2 login to Vigil's own JWTs
 
@@ -392,11 +392,11 @@ Spring stores the authorized client (with its refresh token) and refreshes it tr
 
 ## 9. Build & break — Google sign-in for Vigil
 
-**1. Register an OAuth client.** Google Cloud Console → Credentials → OAuth client ID → Web application. Authorized redirect URI: `http://localhost:8080/login/oauth2/code/google`. **Note that Google requires an exact match** — the open-redirect defence from §5, enforced by the provider.
+**1. Register an OAuth client.** Google Cloud Console → Credentials → OAuth client ID → Web application. Authorized redirect URI: `http://localhost:8080/login/oauth2/code/google`. **Note that Google requires an exact match** — the open-redirect defence from §6, enforced by the provider.
 
 **2. Configure the client** with `spring-boot-starter-oauth2-client`, credentials from environment variables. Start the app and visit `/oauth2/authorization/google`. **With almost no code, you have working Google sign-in.**
 
-**3. ⭐ Watch the flow.** Open DevTools → Network, preserve log, and click sign in. Then trace it against the §2 diagram:
+**3. ⭐ Watch the flow.** Open DevTools → Network, preserve log, and click sign in. Then trace it against the §3 diagram:
 - The redirect to Google — **find `state`, `code_challenge`, `code_challenge_method`, and `scope` in the query string**
 - Google's consent screen
 - The callback to `/login/oauth2/code/google?code=...&state=...`
@@ -406,7 +406,7 @@ Spring stores the authorized client (with its refresh token) and refreshes it tr
 
 **4. Inspect the ID token.** Log the `OidcUser`'s ID token and paste it into jwt.io. Find `iss`, `sub`, `aud`, `nonce`, `email`, `email_verified`. **Confirm `aud` equals your client ID** — that's the confused-deputy defence, visible.
 
-**5. `FederatedIdentity` and find-or-create.** Implement §6's `VigilOidcUserService`, keyed on `(provider, providerUserId)`. Verify a second login reuses the same user. Then manually change the user's email in the database and log in again — **confirm the correct user is still found**, because you keyed on `sub`.
+**5. `FederatedIdentity` and find-or-create.** Implement §7's `VigilOidcUserService`, keyed on `(provider, providerUserId)`. Verify a second login reuses the same user. Then manually change the user's email in the database and log in again — **confirm the correct user is still found**, because you keyed on `sub`.
 
 **6. Break `state`.** Intercept the callback and change the `state` parameter. **Read Spring's rejection.** Then reason about what would happen without that check.
 

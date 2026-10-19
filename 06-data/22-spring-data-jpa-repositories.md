@@ -35,7 +35,7 @@ You wrote an interface with no implementation. It works. **How?**
 4. At creation, the factory:
    a. Instantiates SimpleJpaRepository — the real implementation of all the
       standard methods (findById, save, findAll, delete...)
-   b. PARSES each custom method name into a query (see §2)
+   b. PARSES each custom method name into a query (see §3)
    c. Creates a JDK dynamic PROXY implementing your interface,
       routing each call to either SimpleJpaRepository or the derived query
 
@@ -450,7 +450,7 @@ public interface MonitorRepository extends JpaRepository<Monitor, Long>,
 
 **The `Impl` suffix is a hard convention** — get it wrong and Spring Data won't find your class, failing with a confusing "no property found for..." error as it tries to parse the method name as a derived query. That error message is a well-known head-scratcher, and knowing its cause is a nice piece of practical knowledge.
 
-**This is the pattern for mixing JPA and JDBC cleanly** — exactly what Vigil needs (Lesson 19 §4).
+**This is the pattern for mixing JPA and JDBC cleanly** — exactly what Vigil needs (Lesson 19 §5).
 
 ---
 

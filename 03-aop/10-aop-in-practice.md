@@ -446,7 +446,7 @@ Work in `com.vigil.playground.aop2`.
 
 **Every one of these fails silently.** That's the argument for the `aspectIsActuallyApplied()` guard test.
 
-**6. Write the tests** from §5, including the guard test and the pointcut-matching assertion.
+**6. Write the tests** from §6, including the guard test and the pointcut-matching assertion.
 
 ### Explain out loud (60s)
 

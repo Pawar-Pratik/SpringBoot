@@ -113,7 +113,7 @@ Push/pull per deploy: 60MB            Push/pull per deploy: 400KB
 
 | Flag | Why |
 |---|---|
-| `-XX:MaxRAMPercentage=75` | **Container-aware.** Hardcoded `-Xmx` in a container is a latent OOMKill (Lesson 36 §3) |
+| `-XX:MaxRAMPercentage=75` | **Container-aware.** Hardcoded `-Xmx` in a container is a latent OOMKill (Lesson 36 §4) |
 | `-XX:+ExitOnOutOfMemoryError` | Die cleanly so the orchestrator restarts you, rather than limping in an undefined state |
 | `-XX:+HeapDumpOnOutOfMemoryError` | Diagnose a crash you can't reproduce (and treat the dump as a secret) |
 | `-Djava.security.egd=file:/dev/./urandom` | Avoids blocking on entropy at startup in containers — a classic mysterious slow-start |
@@ -281,7 +281,7 @@ spec:
 
 **The fix:** a `preStop` hook that sleeps. During the sleep the pod keeps serving normally while endpoint removal propagates. Only afterwards does SIGTERM arrive and graceful shutdown begin.
 
-**Combined with Spring Boot's graceful shutdown** (Lesson 08 §2):
+**Combined with Spring Boot's graceful shutdown** (Lesson 08 §3):
 ```yaml
 server:
   shutdown: graceful
@@ -298,14 +298,14 @@ t=~12   In-flight complete → beans destroyed (@PreDestroy) → JVM exits
         (terminationGracePeriodSeconds=45 > 10 + 30, so we're never SIGKILLed)
 ```
 
-**`terminationGracePeriodSeconds` must exceed `preStop` + shutdown timeout**, or Kubernetes SIGKILLs you mid-request — and `@PreDestroy` never runs (Lesson 08 §2).
+**`terminationGracePeriodSeconds` must exceed `preStop` + shutdown timeout**, or Kubernetes SIGKILLs you mid-request — and `@PreDestroy` never runs (Lesson 08 §3).
 
 **Being able to explain the preStop sleep, and *why* it's needed, is one of the strongest deployment answers you can give.** Most people configure graceful shutdown, see occasional 502s during deploys, and never work out why.
 
 ### Resource requests vs limits
 
 - **`requests`** = what the scheduler reserves. Too low → your pod lands on a saturated node.
-- **`limits`** = the hard cap. **Exceed the memory limit and you're OOMKilled instantly** (Lesson 36 §3). Exceed the CPU limit and you're *throttled*, not killed.
+- **`limits`** = the hard cap. **Exceed the memory limit and you're OOMKilled instantly** (Lesson 36 §4). Exceed the CPU limit and you're *throttled*, not killed.
 - **CPU throttling is a subtle latency killer:** a container at its CPU limit is paused for the rest of each 100ms scheduling period, producing periodic latency spikes that look like GC pauses but aren't. **Check `container_cpu_cfs_throttled_seconds_total` before blaming the JVM** — that's a genuinely useful diagnostic most people don't know.
 
 **Also relevant:** a `PodDisruptionBudget` (`minAvailable: 2`) so node drains and cluster upgrades don't take all your replicas at once, and an `HorizontalPodAutoscaler` — for Vigil's checkers, scale on **check backlog** (a custom metric) rather than CPU, since they're I/O-bound and CPU tells you nothing.
@@ -395,7 +395,7 @@ jobs:
 Rolling deploy: old and new pods run SIMULTANEOUSLY against ONE database.
 ```
 
-**Therefore: every migration must be compatible with the currently-running version** (Lesson 24 §3). Which gives the ordering rule:
+**Therefore: every migration must be compatible with the currently-running version** (Lesson 24 §4). Which gives the ordering rule:
 
 ```
 Additive migration (add a nullable column, add a table, add an index):
@@ -413,7 +413,7 @@ Destructive change (drop or rename a column):
 | **A Kubernetes Job / init container before rollout** | ✅ **Cleaner.** One execution, and the deploy fails before any new pod starts if migration fails. |
 | **Separate from deployment entirely** | Full control for large or risky migrations; more process. |
 
-**And the rule for long-running data changes:** never put a multi-million-row `UPDATE` in a startup migration. It blocks the deploy, may hold locks, and there's no progress visibility. **Schema change as a migration; data backfill as a batched background job** (Lesson 24 §3).
+**And the rule for long-running data changes:** never put a multi-million-row `UPDATE` in a startup migration. It blocks the deploy, may hold locks, and there's no progress visibility. **Schema change as a migration; data backfill as a batched background job** (Lesson 24 §4).
 
 ### Deployment strategies
 
@@ -487,17 +487,17 @@ fly deploy
 - [ ] **A custom domain with HTTPS** (a free Let's Encrypt certificate via the platform). `vigil.yourdomain.dev` reads far better than `vigil-production-a1b2.fly.dev`.
 - [ ] **Seeded demo data** and a **public demo login** (`demo@vigil.io` / `demo`), read-only or reset hourly. **Nobody will register to evaluate your project.** This one item probably doubles the number of people who actually look at it.
 - [ ] **A public status page** demonstrating the product — monitoring some real public endpoints
-- [ ] Actuator on a separate port, not publicly exposed (Lesson 28 §5)
+- [ ] Actuator on a separate port, not publicly exposed (Lesson 28 §6)
 - [ ] Automated database backups (managed Postgres does this; **verify a restore works** — an untested backup isn't a backup)
 - [ ] `/actuator/info` exposing the git commit, so you know what's running
-- [ ] **External monitoring of Vigil itself** — a dead-man's-switch heartbeat (Lesson 35 §6). *Vigil cannot monitor Vigil.*
+- [ ] **External monitoring of Vigil itself** — a dead-man's-switch heartbeat (Lesson 35 §7). *Vigil cannot monitor Vigil.*
 - [ ] A sensible cost cap or budget alert so a runaway loop doesn't produce a surprise bill
 
 ---
 
 ## 8. Build & break
 
-**1. The multi-stage Dockerfile** from §2 with layer extraction and a non-root user. Then measure:
+**1. The multi-stage Dockerfile** from §3 with layer extraction and a non-root user. Then measure:
 ```bash
 docker build -t vigil:1 .
 # change one line in a controller
@@ -528,7 +528,7 @@ docker run --rm -v /var/run/docker.sock:/var/run/docker.sock aquasec/trivy image
 ```
 **Read the findings.** Then update the base image and re-scan. **This is a real workflow, and seeing your own image's CVE list is instructive.**
 
-**5. The full Compose stack** from §3. Then, from a clean clone:
+**5. The full Compose stack** from §4. Then, from a clean clone:
 ```bash
 git clone <your repo> && cd vigil && cp .env.example .env && docker compose up
 ```
@@ -546,7 +546,7 @@ docker compose up -d --build vigil
 
 **That before/after number is one of the best things you can put in a README**, and the exercise teaches the preStop mechanic properly.
 
-**7. The CI/CD pipeline** from §5: test → build → scan → push by digest → deploy staging → smoke test → gated production. **Then break something deliberately** (a failing test, a critical CVE) and confirm the pipeline stops.
+**7. The CI/CD pipeline** from §6: test → build → scan → push by digest → deploy staging → smoke test → gated production. **Then break something deliberately** (a failing test, a critical CVE) and confirm the pipeline stops.
 
 **8. ⭐ Deploy it for real.** Fly.io or Hetzner. Custom domain. HTTPS. Demo login. Seeded data. **A public status page monitoring some real endpoints** (github.com, your own site) so a visitor sees the product actually working.
 

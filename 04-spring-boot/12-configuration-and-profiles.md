@@ -377,7 +377,7 @@ application-local.yml
 ```
 Fine for local development and small deployments. Weakness: env vars are visible in `/proc/<pid>/environ`, in `docker inspect`, in crash dumps, and in accidental `System.getenv()` logging.
 
-**Level 2 — mounted secret files.** Kubernetes Secrets or Docker secrets mounted as files, read via `configtree:` (§3). Better than env vars: file permissions apply, and they don't leak into process listings or child processes.
+**Level 2 — mounted secret files.** Kubernetes Secrets or Docker secrets mounted as files, read via `configtree:` (§4). Better than env vars: file permissions apply, and they don't leak into process listings or child processes.
 
 **Level 3 — a secret manager.** HashiCorp Vault, AWS Secrets Manager, Azure Key Vault, GCP Secret Manager.
 ```yaml
@@ -449,7 +449,7 @@ java -jar target/vigil.jar --spring.profiles.active=dev --vigil.demo.value=from-
 ```
 Expose it via an endpoint or log it at startup. Remove the CLI arg → env wins. Remove env → dev profile wins. Remove the profile → base yml. **Run all four steps.** You'll never mis-answer the precedence question again.
 
-**2. Typed, validated properties.** Build `CheckProperties` from §4 with `@Validated`, `@Min`, `@NotEmpty`, and a nested `Retry` record. Then set `max-concurrent=1000` and read the startup failure. **That failure message is the whole point.**
+**2. Typed, validated properties.** Build `CheckProperties` from §5 with `@Validated`, `@Min`, `@NotEmpty`, and a nested `Retry` record. Then set `max-concurrent=1000` and read the startup failure. **That failure message is the whole point.**
 
 **3. Env-var relaxed binding.** Set `VIGIL_CHECKS_MAX_CONCURRENT=25` and verify it binds. Then try to inject the same value with `@Value("${vigil.checks.maxConcurrent}")` and watch it fail — **that's the `@Value` vs `@ConfigurationProperties` difference, felt rather than read.**
 

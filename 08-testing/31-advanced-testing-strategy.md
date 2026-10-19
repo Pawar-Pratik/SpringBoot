@@ -447,7 +447,7 @@ Pull request must have:
 
 ## 8. Build & break — Vigil's test infrastructure
 
-**1. ⭐ ArchUnit rules.** Write at least eight from §1, including `transactionalMethodsMustBePublic` and `entitiesMustNotBeReturnedFromControllers`. **Then deliberately violate each one and read the failure message.** Note that ArchUnit names the exact class and location. **These 30 lines are the highest-leverage code in your test suite.**
+**1. ⭐ ArchUnit rules.** Write at least eight from §2, including `transactionalMethodsMustBePublic` and `entitiesMustNotBeReturnedFromControllers`. **Then deliberately violate each one and read the failure message.** Note that ArchUnit names the exact class and location. **These 30 lines are the highest-leverage code in your test suite.**
 
 **2. OpenAPI snapshot test.** Commit `api-snapshot.json`, write the diff test. Then rename a DTO field and **watch the test fail with a readable diff.** Update the snapshot deliberately and note that the change is now visible in your git history. **This is what "the API contract is reviewed" looks like in practice.**
 
@@ -468,7 +468,7 @@ Open `target/pit-reports/index.html`. Compare your **line coverage** against you
 
 **6. Split unit and integration tests.** Rename integration tests to `*IT`, configure Surefire/Failsafe, and verify `./mvnw test` is fast (seconds) while `./mvnw verify` is thorough.
 
-**7. The GitHub Actions pipeline** from §6 with staged jobs. Push a commit with a compile error and confirm you get feedback in ~90 seconds rather than after the integration stage.
+**7. The GitHub Actions pipeline** from §7 with staged jobs. Push a commit with a compile error and confirm you get feedback in ~90 seconds rather than after the integration stage.
 
 **8. Add Spotless.**
 ```xml

@@ -191,7 +191,7 @@ public interface MonitorSummaryView {
     interface OrgView { String getName(); }
 }
 ```
-One query, only the needed columns, no entities, **N+1 is structurally impossible** because there's no lazy association to traverse. **For read-only endpoints this is the correct answer, not a workaround** (Lesson 22 §4).
+One query, only the needed columns, no entities, **N+1 is structurally impossible** because there's no lazy association to traverse. **For read-only endpoints this is the correct answer, not a workaround** (Lesson 22 §5).
 
 #### Fix 5 — Manual two-query fetch (for complex cases)
 
@@ -209,7 +209,7 @@ Two queries, total control, no ORM surprises. Sometimes the clearest option — 
 ```java
 @ManyToOne(fetch = FetchType.EAGER)     // ❌
 ```
-It "fixes" one call site by degrading every other query on that entity — and EAGER cannot be overridden per query, while LAZY can be upgraded with a fetch join. **Strictly worse in every case.** (Lesson 20 §5.)
+It "fixes" one call site by degrading every other query on that entity — and EAGER cannot be overridden per query, while LAZY can be upgraded with a fetch join. **Strictly worse in every case.** (Lesson 20 §6.)
 
 ---
 
@@ -539,7 +539,7 @@ CREATE POLICY tenant_isolation ON monitor
 
 ## Part 6 — Build & break
 
-**1. ⭐ Create, observe, and fix an N+1.** Seed 100 monitors across 5 organizations. Write the naive `listMonitors` from §1. **Count the SQL statements in your log — you should see 101.** Then fix it five ways and count each time:
+**1. ⭐ Create, observe, and fix an N+1.** Seed 100 monitors across 5 organizations. Write the naive `listMonitors` from §2. **Count the SQL statements in your log — you should see 101.** Then fix it five ways and count each time:
 - `JOIN FETCH`
 - `@EntityGraph`
 - `@BatchSize(25)` — note it's 5 queries, not 1, but 20× better than 101
@@ -548,7 +548,7 @@ CREATE POLICY tenant_isolation ON monitor
 
 **Write the query counts in a table.** That table is a great thing to put in Vigil's README, and it's a great thing to describe in an interview.
 
-**2. Write the N+1 regression test** from §1 using Hibernate `Statistics`. Then break the fix (add a `getOrganization().getName()` somewhere) and watch the test fail. **This is the exercise that makes you the person who prevents N+1 rather than fixing it.**
+**2. Write the N+1 regression test** from §2 using Hibernate `Statistics`. Then break the fix (add a `getOrganization().getName()` somewhere) and watch the test fail. **This is the exercise that makes you the person who prevents N+1 rather than fixing it.**
 
 **3. Set the global safety net.** Add `default_batch_fetch_size: 25` and re-run your worst N+1 case without any other fix. Note the improvement from doing nothing but setting a property.
 
@@ -573,7 +573,7 @@ WHERE monitor_id = '...' ORDER BY checked_at DESC LIMIT 100;
 
 **8. Prove `validate` catches drift.** Add a field to an entity with no matching migration. Read the startup failure. **That failure is your friend** — it caught a forgotten migration before production did.
 
-**9. ⭐ Do an expand/contract rename.** Rename `monitor.url` to `monitor.target_url` across four migrations plus the corresponding code changes, exactly as in §3. **Actually do all four steps.** It's tedious, and doing it once means you can describe it fluently forever.
+**9. ⭐ Do an expand/contract rename.** Rename `monitor.url` to `monitor.target_url` across four migrations plus the corresponding code changes, exactly as in §4. **Actually do all four steps.** It's tedious, and doing it once means you can describe it fluently forever.
 
 **10. Feel a lock.** In one psql session: `BEGIN; SELECT * FROM monitor;` (leave it open). In another: `ALTER TABLE monitor ADD COLUMN x text;`. **Watch it block.** Then in a third session try `SELECT * FROM monitor` and watch *that* block too — behind your waiting ALTER. **That's the pile-up.** Now add `SET lock_timeout = '2s';` before the ALTER and watch it fail fast instead.
 

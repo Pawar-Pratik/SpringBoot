@@ -56,7 +56,7 @@ Tombat worker thread
 
 1. **Authentication and authorization happen entirely before your controller runs.** By the time your method executes, the user is either authenticated and authorized, or the request never arrived. That's why you don't write `if (!user.isAdmin())` in controllers.
 
-2. **`ExceptionTranslationFilter` (13) sits just outside `AuthorizationFilter` (14).** It catches `AuthenticationException` → 401, and `AccessDeniedException` → 403. **This ordering is the entire explanation of 401 vs 403** (§4).
+2. **`ExceptionTranslationFilter` (13) sits just outside `AuthorizationFilter` (14).** It catches `AuthenticationException` → 401, and `AccessDeniedException` → 403. **This ordering is the entire explanation of 401 vs 403** (§5).
 
 3. **The order is fixed and meaningful.** CSRF before authentication (so a stolen session can't be abused via CSRF even if valid). `AnonymousAuthenticationFilter` before authorization (so there's always *some* `Authentication` object, never null). `AuthorizationFilter` last (so all identity information is available).
 
@@ -87,7 +87,7 @@ public interface SecurityContext { Authentication getAuthentication(); ... }
 SecurityContextHolder.getContext().getAuthentication();
 ```
 
-**`SecurityContextHolder` is `ThreadLocal`-based**, which means everything from Lesson 08 §1 applies: **it does not propagate to `@Async`, `@Scheduled`, executors, or reactive threads.** Same root cause as MDC and request scope. Fixes:
+**`SecurityContextHolder` is `ThreadLocal`-based**, which means everything from Lesson 08 §2 applies: **it does not propagate to `@Async`, `@Scheduled`, executors, or reactive threads.** Same root cause as MDC and request scope. Fixes:
 
 ```java
 // Option 1: a security-aware executor
@@ -111,7 +111,7 @@ var auth = SecurityContextHolder.getContext().getAuthentication();
 @GetMapping("/me")
 public UserResponse me(@AuthenticationPrincipal VigilUserDetails user) { ... }
 
-// ✅ Or a custom annotation via an argument resolver (Lesson 14 §3)
+// ✅ Or a custom annotation via an argument resolver (Lesson 14 §4)
 @GetMapping("/monitors")
 public List<MonitorResponse> list(@CurrentOrg UUID orgId) { ... }
 ```
@@ -257,7 +257,7 @@ try {
 ```
 Store `ROLE_ADMIN` in your authorities and use `hasRole("ADMIN")`, **or** store `ADMIN` and use `hasAuthority("ADMIN")`. Mixing them gives a 403 for a user who visibly "has the role." **This is the #1 Spring Security confusion**, and being able to state it crisply is worth real points.
 
-**2. CSRF on a POST.** CSRF protection is **on by default**. A POST from a REST client without a CSRF token gets a 403 that looks like an authorization failure. For a stateless token-authenticated API you disable CSRF — see §6.
+**2. CSRF on a POST.** CSRF protection is **on by default**. A POST from a REST client without a CSRF token gets a 403 that looks like an authorization failure. For a stateless token-authenticated API you disable CSRF — see §7.
 
 ### Debugging tools — learn these now
 
@@ -457,11 +457,11 @@ Using generated security password: 8e4f2a1b-...
 ```
 Try `curl localhost:8080/api/v1/monitors` → 401. Then `curl -u user:<password> ...` → 200. **One dependency, and your app is locked down. That's `@ConditionalOnMissingBean` at work** (Lesson 11) — `SecurityAutoConfiguration` provides a default only because you haven't.
 
-**2. Print the filter chain.** Set `logging.level.org.springframework.security=DEBUG` and restart. **Read the printed chain and match it against the §1 diagram.** Find `ExceptionTranslationFilter` and `AuthorizationFilter` and note their positions. Do this properly — it's the foundation of every future debugging session.
+**2. Print the filter chain.** Set `logging.level.org.springframework.security=DEBUG` and restart. **Read the printed chain and match it against the §2 diagram.** Find `ExceptionTranslationFilter` and `AuthorizationFilter` and note their positions. Do this properly — it's the foundation of every future debugging session.
 
 **3. Real users from the database.** Implement `User`/`Membership` entities, `VigilUserDetails`, and `VigilUserDetailsService`. Add the delegating `PasswordEncoder`. Seed two users (one `ROLE_USER`, one `ROLE_ADMIN`) with hashed passwords via an `ApplicationRunner`.
 
-**4. Configure the chain** from §6: public `/api/v1/auth/**` and `/api/v1/status/**`, `hasRole("ADMIN")` on `/api/v1/admin/**`, `anyRequest().authenticated()`.
+**4. Configure the chain** from §7: public `/api/v1/auth/**` and `/api/v1/status/**`, `hasRole("ADMIN")` on `/api/v1/admin/**`, `anyRequest().authenticated()`.
 
 **5. ⭐ Reproduce the `ROLE_` prefix bug.** Store authorities as `"ADMIN"` (no prefix) and use `.hasRole("ADMIN")`. **Get a 403 as an admin user.** Read the DEBUG log — you'll see it looking for `ROLE_ADMIN`. Then fix it two ways (add the prefix when building authorities; or switch to `hasAuthority`). **This is the most common Spring Security bug; manufacture it once and you'll diagnose it instantly forever.**
 

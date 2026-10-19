@@ -395,7 +395,7 @@ logging.level.org.springframework.web=DEBUG
 logging.level.org.springframework.web.servlet.DispatcherServlet=TRACE
 logging.level.org.springframework.web.servlet.mvc.method.annotation=TRACE
 ```
-Hit an endpoint and read the log carefully. You'll see the handler mapped, arguments resolved, the return value written. **Match each line to a step in §3.** This is the exercise that converts the diagram into knowledge.
+Hit an endpoint and read the log carefully. You'll see the handler mapped, arguments resolved, the return value written. **Match each line to a step in §4.** This is the exercise that converts the diagram into knowledge.
 
 **2. See the handler map.** Hit `/actuator/mappings` — every URL → handler method, exactly as `RequestMappingHandlerMapping` built it at startup.
 
@@ -423,7 +423,7 @@ Observe: 5 run immediately, 2 queue, the rest are **refused**. You just reproduc
 
 **4. Fix it with virtual threads.** Add `spring.threads.virtual.enabled=true` (Java 21 required — install it if you haven't) and repeat. Note the thread names change to `VirtualThread[#...]` and all 10 requests complete in ~5s total. **Then reason about what would happen if `/slow` hit the database instead of sleeping** — the answer is "you'd starve the Hikari pool instead," which is the whole lesson about virtual threads moving bottlenecks.
 
-**5. Write the correlation-ID filter** from §4. Verify the header round-trips, that it appears in log output (add `%X{correlationId}` to your logging pattern), and that a **404** also gets one. Then **remove `MDC.clear()`**, hammer the endpoint concurrently, and watch correlation IDs bleed between requests. Feel that bug.
+**5. Write the correlation-ID filter** from §5. Verify the header round-trips, that it appears in log output (add `%X{correlationId}` to your logging pattern), and that a **404** also gets one. Then **remove `MDC.clear()`**, hammer the endpoint concurrently, and watch correlation IDs bleed between requests. Feel that bug.
 
 **6. Filter vs interceptor, empirically.** Register both, printing on entry. Then request:
 - a valid endpoint → both run
@@ -432,7 +432,7 @@ Observe: 5 run immediately, 2 queue, the rest are **refused**. You just reproduc
 
 **That's the decision matrix, proven rather than memorized.**
 
-**7. Custom argument resolver.** Implement `@CurrentTenant` from §3 (read the tenant from a header for now). Use it in a controller. This is a genuinely impressive thing to be able to write from scratch in an interview.
+**7. Custom argument resolver.** Implement `@CurrentTenant` from §4 (read the tenant from a header for now). Use it in a controller. This is a genuinely impressive thing to be able to write from scratch in an interview.
 
 ### Explain out loud (60s)
 
@@ -465,7 +465,7 @@ Observe: 5 run immediately, 2 queue, the rest are **refused**. You just reproduc
 ## 9. Interview traps
 
 **Q1. Walk me through what happens when an HTTP request hits your Spring Boot app.** *(the flagship question)*
-Give §3: TCP → Tomcat acceptor/poller → a worker thread from the pool → the servlet filter chain (including Spring Security) → `DispatcherServlet.doDispatch` → `HandlerMapping` finds the handler → interceptor `preHandle` → `HandlerAdapter` uses argument resolvers (and `HttpMessageConverter` for `@RequestBody`) to build parameters → your controller method is invoked reflectively → the return value goes through a return-value handler and message converter to JSON → `postHandle` → exception resolvers if anything threw → `afterCompletion` → response flushed → **the worker thread returns to the pool**.
+Give §4: TCP → Tomcat acceptor/poller → a worker thread from the pool → the servlet filter chain (including Spring Security) → `DispatcherServlet.doDispatch` → `HandlerMapping` finds the handler → interceptor `preHandle` → `HandlerAdapter` uses argument resolvers (and `HttpMessageConverter` for `@RequestBody`) to build parameters → your controller method is invoked reflectively → the return value goes through a return-value handler and message converter to JSON → `postHandle` → exception resolvers if anything threw → `afterCompletion` → response flushed → **the worker thread returns to the pool**.
 
 **Q2. What is `DispatcherServlet`?**
 The single front-controller servlet, mapped to `/`, that all requests pass through. It owns the dispatch pipeline (mapping, adapting, converting, exception resolution) so cross-cutting behaviour is applied uniformly instead of per-servlet.

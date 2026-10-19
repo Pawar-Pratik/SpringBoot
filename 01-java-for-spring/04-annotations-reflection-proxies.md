@@ -594,7 +594,7 @@ Answer out loud, no notes:
 1. Someone says "Spring is too magical." Rebut it in four sentences using the words *annotation*, *reflection*, *proxy*, and *conditional*.
 2. A colleague reports "`@Async` runs on the main thread." Give your first hypothesis and the diagnostic you'd run.
 3. Why can't Spring proxy a `final` class with CGLIB, and what error/behaviour do you actually observe?
-4. Narrate the 10 startup steps from §Part 4. (This is worth practising until fluent — it's the single highest-leverage answer in Spring interviews.)
+4. Narrate the 10 startup steps from §Part 5. (This is worth practising until fluent — it's the single highest-leverage answer in Spring interviews.)
 5. Why does GraalVM native image need Spring's AOT processing? Connect it to reflection.
 6. In your mini-container, what line of code *is* dependency injection? What line *is* AOP?
 

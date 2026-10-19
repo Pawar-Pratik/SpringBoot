@@ -26,7 +26,7 @@ public List<MonitorSummary> list(UUID orgId) {
 }
 ```
 
-You've hidden a 2-second query behind a cache. Now: the first request after every deploy is slow, cache expiry produces random 2-second spikes, and a cache miss under load produces a stampede (§5). **And the actual bug — the missing index — is still there.**
+You've hidden a 2-second query behind a cache. Now: the first request after every deploy is slow, cache expiry produces random 2-second spikes, and a cache miss under load produces a stampede (§6). **And the actual bug — the missing index — is still there.**
 
 **The order of operations:**
 1. **Measure.** Where does the latency actually go? (Lesson 35)
@@ -199,13 +199,13 @@ public class CacheConfig {
 
     @Bean
     RedisCacheManager cacheManager(RedisConnectionFactory factory, ObjectMapper objectMapper) {
-        var json = new GenericJackson2JsonRedisSerializer(objectMapper);   // ★ see §3.1
+        var json = new GenericJackson2JsonRedisSerializer(objectMapper);   // ★ see §4.1
 
         var defaults = RedisCacheConfiguration.defaultCacheConfig()
                 .entryTtl(Duration.ofMinutes(10))                 // ★ ALWAYS set a TTL
                 .serializeKeysWith(SerializationPair.fromSerializer(new StringRedisSerializer()))
                 .serializeValuesWith(SerializationPair.fromSerializer(json))
-                .disableCachingNullValues()                       // ★ but see §5 on null caching
+                .disableCachingNullValues()                       // ★ but see §6 on null caching
                 .prefixCacheNameWith("vigil:v1:");                // ★ see below
 
         return RedisCacheManager.builder(factory)
@@ -216,7 +216,7 @@ public class CacheConfig {
                         defaults.entryTtl(Duration.ofMinutes(5)))
                 .withCacheConfiguration("planLimits",
                         defaults.entryTtl(Duration.ofHours(24)))       // changes almost never
-                .transactionAware()                                    // ★ see §4
+                .transactionAware()                                    // ★ see §5
                 .build();
     }
 }
@@ -224,13 +224,13 @@ public class CacheConfig {
 
 **Three configuration details that matter more than they look:**
 
-**1. `prefixCacheNameWith("vigil:v1:")`** — the version prefix is a **deployment safety feature**. Change a DTO's shape and old cached entries can't be deserialized (§3.1). Bumping the prefix to `v2` makes the entire old cache unreachable — an instant, safe, zero-downtime cache flush. **Far better than `FLUSHDB`, which affects everything sharing the Redis instance.** This is a genuinely good detail to mention.
+**1. `prefixCacheNameWith("vigil:v1:")`** — the version prefix is a **deployment safety feature**. Change a DTO's shape and old cached entries can't be deserialized (§4.1). Bumping the prefix to `v2` makes the entire old cache unreachable — an instant, safe, zero-downtime cache flush. **Far better than `FLUSHDB`, which affects everything sharing the Redis instance.** This is a genuinely good detail to mention.
 
 **2. Per-cache TTLs.** A 24-hour TTL for plan limits and 30 seconds for status pages reflects how often each actually changes. One global TTL means either stale data or a useless hit rate.
 
-**3. Timeouts.** **Redis must have a command timeout.** Without one, a Redis hiccup blocks your request threads indefinitely — the cache you added for performance takes your whole application down (Lessons 14, 19). §6 covers this properly.
+**3. Timeouts.** **Redis must have a command timeout.** Without one, a Redis hiccup blocks your request threads indefinitely — the cache you added for performance takes your whole application down (Lessons 14, 19). §7 covers this properly.
 
-### 3.1 Serialization — where the real operational pain is
+### 4.1 Serialization — where the real operational pain is
 
 **The default is JDK serialization**, which is a bad choice:
 - Values are unreadable in `redis-cli`, so you can't debug
@@ -362,7 +362,7 @@ public StatusPageResponse render(String slug) {
     return getStale(slug).orElseGet(() -> waitAndRead(slug));
 }
 ```
-**Exactly one computation cluster-wide.** More code; use Redisson's `RLock` rather than hand-rolling in production (Lesson 10 §3).
+**Exactly one computation cluster-wide.** More code; use Redisson's `RLock` rather than hand-rolling in production (Lesson 10 §4).
 
 ### Fix 3 — Stale-while-revalidate (the best UX)
 
@@ -452,7 +452,7 @@ public class RedisCacheHealthIndicator implements HealthIndicator {
 
 ## 8. HTTP caching — the cache you didn't have to build
 
-Before caching server-side, ask whether the client can cache (Lesson 15 §5):
+Before caching server-side, ask whether the client can cache (Lesson 15 §6):
 
 ```java
 return ResponseEntity.ok()
@@ -474,7 +474,7 @@ return ResponseEntity.ok()
 docker run --name vigil-redis -p 6379:6379 -d redis:7-alpine
 ```
 
-**2. `CacheConfig`** from §3 with per-cache TTLs, JSON serialization, a `vigil:v1:` prefix, `transactionAware()`, and the error handler.
+**2. `CacheConfig`** from §4 with per-cache TTLs, JSON serialization, a `vigil:v1:` prefix, `transactionAware()`, and the error handler.
 
 **3. Cache the status page** (`@Cacheable`, 30s TTL) and plan limits (24h TTL). Measure before and after with `curl -w "%{time_total}"` and **write the numbers down.**
 

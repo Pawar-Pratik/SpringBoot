@@ -145,7 +145,7 @@ Exponential + JITTER:  0.4s, 1.1s, 2.3s, 3.6s — ✅ retries spread out
 ```
 **Retry amplification.** With retries at every layer, one user request becomes dozens against your deepest dependency — precisely when it's already struggling. **Retry at ONE layer, ideally the outermost that can meaningfully recover**, and never retry a request that a lower layer already retried.
 
-**4. Retries require idempotency.** §5. A retried POST that isn't idempotent creates duplicates. **This is the constraint that makes retries dangerous rather than free.**
+**4. Retries require idempotency.** §6. A retried POST that isn't idempotent creates duplicates. **This is the constraint that makes retries dangerous rather than free.**
 
 **5. Never retry inside a transaction.**
 ```java
@@ -153,9 +153,9 @@ Exponential + JITTER:  0.4s, 1.1s, 2.3s, 3.6s — ✅ retries spread out
 @Transactional
 public void process() { retryTemplate.execute(ctx -> slackClient.send(...)); }
 ```
-You're holding a pooled connection through the backoff delays (Lesson 23 §6). Retry *outside* the transaction, or better, publish an event and retry the delivery separately.
+You're holding a pooled connection through the backoff delays (Lesson 23 §7). Retry *outside* the transaction, or better, publish an event and retry the delivery separately.
 
-**6. Retry advice must be OUTSIDE transaction advice.** `@Retryable` on a `@Transactional` method works because retry ordering places it outermost by default — so each attempt gets a *fresh* transaction. **If it were inside, you'd retry within a rolled-back transaction, which cannot succeed.** Verify the ordering (Lesson 10 §3); it's a subtle, high-value detail.
+**6. Retry advice must be OUTSIDE transaction advice.** `@Retryable` on a `@Transactional` method works because retry ordering places it outermost by default — so each attempt gets a *fresh* transaction. **If it were inside, you'd retry within a rolled-back transaction, which cannot succeed.** Verify the ordering (Lesson 10 §4); it's a subtle, high-value detail.
 
 ---
 
@@ -215,7 +215,7 @@ resilience4j:
     instances:
       slack:
         base-config: default
-      checkTarget:                             # ★ per-monitor, see §3.1
+      checkTarget:                             # ★ per-monitor, see §4.1
         base-config: default
         failure-rate-threshold: 80
         wait-duration-in-open-state: 60s
@@ -251,7 +251,7 @@ Retry ( CircuitBreaker ( RateLimiter ( TimeLimiter ( Bulkhead ( your call )))))
 
 **`slow-call-rate-threshold` is underrated:** a dependency that responds in 30 seconds is functionally down even though it never errors. Counting slow calls as failures is what catches that — and it's the case pure error-rate breakers miss.
 
-### 3.1 The Vigil-specific design point
+### 4.1 The Vigil-specific design point
 
 **Vigil calls thousands of *different* customer URLs.** A single shared circuit breaker would be wrong in both directions:
 - One broken customer endpoint would open the circuit and **stop checking everyone else** — the exact opposite of what a monitoring tool must do
@@ -442,7 +442,7 @@ private Uptime cachedUptime(UUID monitorId, Throwable t) {
 
 **1. Timeouts everywhere.** Audit every outbound call: `RestClient` connect + read, Hikari `connection-timeout`, `statement_timeout` via `connection-init-sql`, Redis `timeout`. **Write them in a table with a justification for each value** — that document is a great thing to have in the repo.
 
-**2. ⭐ Prove your timeout fires** (revisiting Lesson 30 §6). WireMock with `withFixedDelay(60_000)`, then assert the call fails in ~10s, not 60s. **Then set the read timeout to 0 (infinite) and watch the test hang** — that hang is a production outage in miniature.
+**2. ⭐ Prove your timeout fires** (revisiting Lesson 30 §7). WireMock with `withFixedDelay(60_000)`, then assert the call fails in ~10s, not 60s. **Then set the read timeout to 0 (infinite) and watch the test hang** — that hang is a production outage in miniature.
 
 **3. Retries with jitter** on the Slack notifier: `retryFor` transient exceptions only, `noRetryFor` 4xx, exponential backoff with `random = true`, and a `@Recover` writing to a dead-letter table. **Log every attempt** and confirm the delays are non-uniform.
 

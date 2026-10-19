@@ -389,7 +389,7 @@ com.vigil
 
 ## 10. Build & break
 
-**1. Restructure your project.** Create the Vigil package skeleton from §8 (empty packages with a `package-info.java` are fine). Move your playground classes into `playground/` so they don't pollute it.
+**1. Restructure your project.** Create the Vigil package skeleton from §9 (empty packages with a `package-info.java` are fine). Move your playground classes into `playground/` so they don't pollute it.
 
 **2. Implement one vertical slice properly, with real encapsulation:**
 ```

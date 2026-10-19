@@ -446,7 +446,7 @@ Lesson 32 and 36 go deeper — including virtual threads, which change the econo
 
 In your `vigil` project, create `src/main/java/com/vigil/playground/` and write real code. Don't skip this — typing it is the point.
 
-**1. An enum with behaviour** — `MonitorStatus` exactly as in §3, with `label()`, `colour()`, `isFailing()`.
+**1. An enum with behaviour** — `MonitorStatus` exactly as in §4, with `label()`, `colour()`, `isFailing()`.
 
 **2. An interface + two implementations:**
 ```java
