@@ -6,7 +6,15 @@
 
 ---
 
-## 1. Anatomy of an entity
+## 1. The idea in one sentence
+
+> **An object graph and a set of rows are two models of the same facts, and Hibernate reconciles them only through the *owning* side — so every trap in this lesson is a place where the Java object says one thing and the foreign key says another.**
+
+Update the wrong side and nothing persists. Base equality on a value that changes and the object vanishes from its own `Set`. Cascade in the wrong direction and deleting a monitor deletes the customer. Same question each time: which model is authoritative here?
+
+---
+
+## 2. Anatomy of an entity
 
 ```java
 @Entity
@@ -150,7 +158,7 @@ Transparent field-level encryption. Caveat to state: **you can no longer query o
 
 ---
 
-## 2. Relationships
+## 3. Relationships
 
 ### `@ManyToOne` — the one you'll use most
 
@@ -305,7 +313,7 @@ public class Membership {
 
 ---
 
-## 3. Cascade and `orphanRemoval`
+## 4. Cascade and `orphanRemoval`
 
 ```java
 CascadeType.PERSIST    // save parent → save children
@@ -354,7 +362,7 @@ monitor.getResults().remove(result);      // → DELETE FROM check_result WHERE 
 
 ---
 
-## 4. `equals` and `hashCode` — the most misunderstood topic in JPA
+## 5. `equals` and `hashCode` — the most misunderstood topic in JPA
 
 ```java
 // ❌ WRONG — Lombok's @Data / @EqualsAndHashCode on an entity
@@ -437,7 +445,7 @@ public class Monitor {
 
 ---
 
-## 5. Inheritance strategies
+## 6. Inheritance strategies
 
 ```java
 @Inheritance(strategy = InheritanceType.SINGLE_TABLE)      // default
@@ -475,7 +483,7 @@ public class Monitor extends BaseEntity { ... }
 
 ---
 
-## 6. Auditing
+## 7. Auditing
 
 ```java
 @Configuration
@@ -509,7 +517,7 @@ Four audit columns on every entity, for free. **Note the `or(() -> "system")` fa
 
 ---
 
-## 7. Build this — Vigil's full data model
+## 8. Build & break — Vigil's full data model
 
 Model the whole domain now. This is real project work.
 
@@ -551,9 +559,36 @@ Model the whole domain now. This is real project work.
 
 **g) Schema validation.** Set `ddl-auto: validate` with a mismatched column name and read the error. This is the setting that catches entity/schema drift before production does.
 
+### Explain out loud (60s)
+
+1. Why `EnumType.ORDINAL` is a data-corruption bug, with the version-1-to-version-2 example.
+2. The owning side: which side holds the FK, and what happens when you update the other one.
+3. The cascade question in one sentence, and the `@ManyToOne` catastrophe.
+4. Why `@Data` on an entity breaks in three separate ways.
+5. Why a constant `hashCode` on an entity is deliberately correct.
+
 ---
 
-## 8. Interview traps
+## 9. Production rules
+
+| Do / Never | Why |
+|---|---|
+| **Always `@Enumerated(EnumType.STRING)`** | `ORDINAL` is the default and stores positions, so inserting a constant silently reinterprets every historical row with no error and no migration |
+| **Put `@Version` on every entity two users can edit at once** | One column turns "the second admin silently overwrote the first" into a 409 the client can retry |
+| **Always give `@OneToMany` a `mappedBy`** | Without it Hibernate assumes this side owns the relationship and quietly creates a join table you never asked for |
+| **Write `addChild`/`removeChild` helpers that set both sides** | Only the owning side's state is written, so a one-sided update leaves the in-memory graph and the database disagreeing |
+| **Cascade from parent to child only, never child to parent** | `CascadeType.ALL` on a `@ManyToOne` means deleting one monitor can delete the organization and everything under it |
+| **Ask "do the children mean anything without the parent?" before cascading** | `CheckResult` without its monitor is meaningless, so cascade is right; an `Organization` outlives its monitors, so it never is |
+| **Use database `ON DELETE CASCADE` plus a bulk delete for high-volume children** | A JPA cascade loads all million rows into memory and issues a million DELETEs |
+| **Never put Lombok `@Data` or `@EqualsAndHashCode` on an entity** | It touches lazy associations during `Set.add()`, recurses infinitely in `toString()` on bidirectional links, and changes `hashCode` as fields change |
+| **Base `equals` on the ID with `Hibernate.getClass()`, and return a constant `hashCode`** | A proxy's class is a subclass, so `getClass()` comparison fails; a constant hash stays stable across the transient→persistent transition |
+| **Prefer a stable business key when the entity has one** | It gives you real equality semantics before persist, instead of "no two unsaved entities are ever equal" |
+| **Never make an entity class or its getters `final`, and keep the no-arg constructor `protected`** | `final` silently disables proxying and therefore lazy loading; `protected` tells your own code not to use the constructor Hibernate needs |
+| **Never use a record as an entity** | No no-arg constructor, `final` class, immutable fields — all three are incompatible with proxying and dirty checking |
+
+---
+
+## 10. Interview traps
 
 **Q1. Why can't a record be a JPA entity?**
 Records are `final`, have no no-arg constructor, and have immutable fields. Hibernate needs a non-final class (to generate proxy subclasses for lazy loading), a no-arg constructor (to instantiate reflectively before populating), and mutable fields (for dirty checking). Records are ideal for DTOs and projections instead.
@@ -593,7 +628,7 @@ JPA cascade loads every child into the persistence context and issues one DELETE
 
 ---
 
-## 9. Retention check
+## 11. Retention check
 
 1. Name JPA's three structural requirements on an entity class and what each is for.
 2. Explain the bidirectional trap and the exact fix, in 30 seconds.

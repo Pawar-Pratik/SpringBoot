@@ -1,12 +1,20 @@
 # Lesson 23 — Transactions deep dive
 
-> **This is the highest-value interview topic in the entire course.** `@Transactional` is one annotation with roughly eight ways to be subtly wrong, and every one of them is a favourite question. Propagation, isolation, rollback rules, self-invocation, transaction scope, locking. Master this lesson and you will out-answer nearly every candidate you're compared against — and you'll write systems that don't corrupt data.
+> **Why this lesson exists:** this is the highest-value interview topic in the entire course. `@Transactional` is one annotation with roughly eight ways to be subtly wrong, and every one of them is a favourite question. Propagation, isolation, rollback rules, self-invocation, transaction scope, locking. Master this lesson and you will out-answer nearly every candidate you're compared against — and you'll write systems that don't corrupt data.
 
 **Time:** ~95 minutes · **Prereq:** Lessons 09, 20
 
 ---
 
-## 1. ACID, and what your database actually gives you
+## 1. The idea in one sentence
+
+> **`@Transactional` answers three independent questions — where the transaction starts (propagation), what undoes it (rollback rules), and who else may touch the rows meanwhile (isolation and locking) — and every classic bug here is you assuming one answer while the proxy applied another.**
+
+Hold the three apart and the hard cases become ordinary. "Marked rollback-only" is propagation. A committed `IOException` is rollback rules. A lost update is locking. Nothing about them is mysterious once you know which question you got wrong.
+
+---
+
+## 2. ACID, and what your database actually gives you
 
 | Property | Meaning | Who provides it |
 |---|---|---|
@@ -72,7 +80,7 @@ T2: write 100-20=80  ─┘  ← T1's deduction vanished
 
 ---
 
-## 2. `@Transactional` — how it actually works
+## 3. `@Transactional` — how it actually works
 
 You know this from Lesson 09: **`@Transactional` is `@Around` advice on a proxy.**
 
@@ -113,7 +121,7 @@ Reads get the read-only benefits (Lesson 20 §5) and accidental mutations can't 
 
 ---
 
-## 3. Propagation — the most-asked sub-topic
+## 4. Propagation — the most-asked sub-topic
 
 **Propagation answers: "a transaction already exists; what should I do?"**
 
@@ -208,7 +216,7 @@ A method that only makes sense as part of a larger unit of work declares it. Cal
 
 ---
 
-## 4. Rollback rules — the classic gotcha
+## 5. Rollback rules — the classic gotcha
 
 ```java
 @Transactional
@@ -240,7 +248,7 @@ Rarely the right design (an exception is clearer), but it exists.
 
 ---
 
-## 5. Locking
+## 6. Locking
 
 ### Optimistic locking — your default
 
@@ -323,7 +331,7 @@ DETAIL: Process 123 waits for ShareLock on transaction 456...
 
 ---
 
-## 6. The mistakes that cause real incidents
+## 7. The mistakes that cause real incidents
 
 ### ❌ #1 — A transaction spanning a network call
 
@@ -407,7 +415,7 @@ Keep the transaction as small as the atomic unit requires. Load data, close the 
 
 ---
 
-## 7. Programmatic transactions
+## 8. Programmatic transactions
 
 ```java
 @Service
@@ -443,7 +451,7 @@ template.setIsolationLevel(TransactionDefinition.ISOLATION_READ_COMMITTED);
 
 ---
 
-## 8. Build this
+## 9. Build & break
 
 **Turn on the evidence first — you can't learn this without it:**
 ```properties
@@ -496,9 +504,37 @@ public void slow() throws InterruptedException { Thread.sleep(5000); repo.save(.
 ```
 Read the `TransactionTimedOutException`. Note that the timeout is checked **at the next database operation**, not by interrupting your thread — so a pure `Thread.sleep` isn't cut short. That detail matters and surprises people.
 
+### Explain out loud (60s)
+
+1. The three questions `@Transactional` answers, and one classic bug from each.
+2. The "marked rollback-only" trace: who set the flag, and why your `catch` made it worse.
+3. Why a checked exception commits by default, and the fix.
+4. What `REQUIRES_NEW` costs, in connections and in visibility.
+5. Why no network call belongs inside a transaction, and what to use instead.
+
 ---
 
-## 9. Interview traps
+## 10. Production rules
+
+| Do / Never | Why |
+|---|---|
+| **Nothing but database work goes inside a transaction** | An HTTP call, a message publish or a sleep holds a pooled connection and a row lock for the duration of someone else's outage |
+| **Use `@TransactionalEventListener(AFTER_COMMIT)` to trigger side effects** | It is the clean way to say "only if this actually committed" — no I/O inside the transaction, and no notifications for work that rolled back |
+| **Put `@Transactional` on public service methods, and never self-invoke them** | It's proxy-based, so a `private`, `final` or `this.`-called method is silently un-advised — and a `REQUIRES_NEW` that silently joins is worse than none |
+| **Add `rollbackFor = Exception.class` wherever checked exceptions can escape** | The default rolls back only on unchecked exceptions, so a checked `IOException` commits your half-finished work |
+| **Never catch an exception from an inner `REQUIRED` method and carry on** | The inner proxy set rollback-only on the shared transaction, so your commit fails with `UnexpectedRollbackException` far from the cause |
+| **Isolate a tolerable failure with `REQUIRES_NEW`, not with a `try/catch`** | That gives the inner work its own transaction to roll back, which is what you meant when you decided the failure was survivable |
+| **Never call `REQUIRES_NEW` in a loop** | Each one suspends the caller's connection and takes a second from the pool, which is a documented way to exhaust it |
+| **Put `readOnly = true` on read paths, knowing it isn't a guarantee** | It skips dirty-check snapshots and blocks accidental flushes, but it does not make the database refuse writes |
+| **Use `@Version` plus a 409 as your default concurrency strategy** | No locks held means no blocking, no deadlocks and no lock timeouts; you only pay on an actual conflict, which is rare |
+| **Put retry advice outside the transaction** | Retrying inside a transaction that is already doomed just repeats the failure; verify the advice ordering rather than assuming it |
+| **Use `MANDATORY` on methods that only make sense inside a larger unit of work** | Called standalone they fail loudly instead of quietly auto-committing a fragment |
+| **Don't reach for `NESTED` under JPA** | `JpaTransactionManager` doesn't support savepoint-based nesting and throws `NestedTransactionNotSupportedException` |
+| **Never assume a transaction crosses a thread** | It is bound to the thread via `ThreadLocal`, so `@Async` work runs in no transaction at all unless it starts its own |
+
+---
+
+## 11. Interview traps
 
 **Q1. How does `@Transactional` work?**
 It's `@Around` advice on a Spring AOP proxy. The proxy asks the `PlatformTransactionManager` to begin (or join) a transaction bound to the current thread via a `ThreadLocal`, invokes the target, then commits — or rolls back on `RuntimeException`/`Error`. Because it's proxy-based, all Lesson 09 limitations apply: no effect on `private`/`final`/`static` methods or self-invoked calls.
@@ -544,7 +580,7 @@ Acquire locks in a consistent order (e.g. sort IDs before locking a batch), keep
 
 ---
 
-## 10. Retention check
+## 12. Retention check
 
 1. Explain `UnexpectedRollbackException` in 30 seconds, including why the mental model that causes it is reasonable.
 2. Why doesn't a checked exception roll back, and what's the design argument for it?

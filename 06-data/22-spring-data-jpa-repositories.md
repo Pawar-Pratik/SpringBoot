@@ -6,7 +6,15 @@
 
 ---
 
-## 1. How a repository interface becomes a working bean
+## 1. The idea in one sentence
+
+> **Spring Data generates a query for every method you declare, and that convenience is exactly its danger — the method name hides the SQL, so the whole discipline is knowing which statements each tool produces before you reach for it.**
+
+A derived name, a `@Query`, a projection, a `Specification` and a bulk `@Modifying` update are five different SQL shapes with five different costs. Choosing between them is the skill; the syntax is the easy part.
+
+---
+
+## 2. How a repository interface becomes a working bean
 
 ```java
 public interface MonitorRepository extends JpaRepository<Monitor, Long> {
@@ -82,7 +90,7 @@ The catch: it throws `EntityNotFoundException` *later*, on first access, not at 
 
 ---
 
-## 2. Derived query methods
+## 3. Derived query methods
 
 Spring Data parses the method name into a query:
 
@@ -132,7 +140,7 @@ List<Monitor> findByOrganizationIdAndStatusInAndLastCheckedAtBeforeAndNameContai
 
 ---
 
-## 3. `@Query` — JPQL and native SQL
+## 4. `@Query` — JPQL and native SQL
 
 ```java
 public interface MonitorRepository extends JpaRepository<Monitor, Long> {
@@ -229,7 +237,7 @@ if (!SORTABLE.contains(sortColumn)) throw new BadRequestException("invalid sort"
 
 ---
 
-## 4. Projections — read only what you need
+## 5. Projections — read only what you need
 
 **This is one of the biggest, easiest performance wins in JPA, and most people don't use it.**
 
@@ -303,7 +311,7 @@ One method, caller chooses the shape. Genuinely elegant.
 
 ---
 
-## 5. Pagination and sorting
+## 6. Pagination and sorting
 
 ```java
 Page<Monitor> findByOrganizationId(Long orgId, Pageable pageable);
@@ -350,7 +358,7 @@ HHH90003004: firstResult/maxResults specified with collection fetch; applying in
 
 ---
 
-## 6. Specifications — type-safe dynamic queries
+## 7. Specifications — type-safe dynamic queries
 
 For search screens with optional filters, string concatenation is unacceptable and 2^n derived methods is absurd.
 
@@ -412,7 +420,7 @@ If asked: *"Specifications by default since they're built in; Querydsl if the te
 
 ---
 
-## 7. Custom repository implementations
+## 8. Custom repository implementations
 
 When you need `EntityManager` or `JdbcClient` directly, but want it on the same repository interface:
 
@@ -446,7 +454,7 @@ public interface MonitorRepository extends JpaRepository<Monitor, Long>,
 
 ---
 
-## 8. Build this — Vigil's repository layer
+## 9. Build & break — Vigil's repository layer
 
 **1. `MonitorRepository`:**
 - `existsByOrganizationIdAndName` — for the duplicate-name check
@@ -486,9 +494,36 @@ public void demo(Long id) {
 ```
 Then add `clearAutomatically = true` and re-run. **Those two runs side by side are the clearest possible demonstration of the persistence context as a cache.**
 
+### Explain out loud (60s)
+
+1. How an interface with no implementation becomes a working bean.
+2. When a derived method name stops being the right tool, and what replaces it.
+3. What `@Modifying` bypasses, what both flags fix, and what `clearAutomatically` costs.
+4. `Page` vs `Slice` vs `List`, counted in queries.
+5. Two things a derived `deleteBy…` does that a bulk delete doesn't.
+
 ---
 
-## 9. Interview traps
+## 10. Production rules
+
+| Do / Never | Why |
+|---|---|
+| **Extend bare `Repository` and declare only what you need on large tables** | `JpaRepository` hands every caller `findAll()` and `deleteAll()`, and on a 50-million-row table an innocent `findAll()` is an outage |
+| **Keep derived method names to two or three conditions** | A method name is documentation; past that it stops being readable, and `@Query` or a `Specification` says the same thing better |
+| **Avoid `Containing` on a large table** | It generates `LIKE '%value%'`, and a leading wildcard can't use a B-tree index — use full-text search or a trigram index instead |
+| **Never use a derived `deleteBy…` for bulk deletion** | It loads every match into the context and issues one DELETE each — 100,000 rows means 100,001 statements |
+| **Set both `clearAutomatically` and `flushAutomatically` on `@Modifying`** | Bulk queries bypass the persistence context, so loaded entities keep stale values and a later read returns the cached object, not the database's |
+| **Remember `clearAutomatically` detaches everything you were holding** | It fixes staleness by evicting the whole context, which re-exposes you to the silent detached-update trap |
+| **Use a projection when you need a few columns** | Loading whole entities to read two fields costs the extra columns, the dirty-check snapshot and often a join you didn't want |
+| **Paginate every list endpoint** | An unbounded query is fine until the table grows, and then it fails in production rather than in review |
+| **Prefer `Slice` to `Page` for infinite scroll** | `Page` adds a `count(*)` over the filtered table that an endless-scroll UI never displays — dropping it halves the queries |
+| **Use `getReferenceById` to set a foreign key, `findById` when existence matters** | The reference is a lazy proxy with no SELECT, but it throws on first access rather than at call time |
+| **Never concatenate user input into a query string** | Parameters are bound separately and are safe; a native `@Query` built by concatenation is the one injection route Spring doesn't close for you |
+| **Validate a dynamic `ORDER BY` column against an allowlist** | Identifiers can't be parameterized, so a user-supplied sort field is both an injection surface and a way to probe your schema |
+
+---
+
+## 11. Interview traps
 
 **Q1. How does Spring Data create an implementation for your interface?**
 `@EnableJpaRepositories` scans for `Repository` sub-interfaces and registers a `JpaRepositoryFactoryBean` for each. The factory instantiates `SimpleJpaRepository` for the standard methods, parses custom method names into queries, and builds a **JDK dynamic proxy** implementing your interface that routes calls appropriately. It's `FactoryBean` + reflection + proxies.
@@ -528,7 +563,7 @@ It generates `LIKE '%value%'`. A leading wildcard can't use a standard B-tree in
 
 ---
 
-## 10. Retention check
+## 12. Retention check
 
 1. Explain how `MonitorRepository` gets an implementation, naming three mechanisms from earlier lessons.
 2. Why might you deliberately extend `Repository` instead of `JpaRepository`?

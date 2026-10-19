@@ -6,7 +6,15 @@
 
 ---
 
-## 1. JDBC — the foundation
+## 1. The idea in one sentence
+
+> **Your service's real concurrency limit isn't the 200 Tomcat threads — it's the ten connections in the pool, and a queue in front of a fast database beats a mob inside a slow one.**
+
+Queueing at the pool is admission control, not a bug. Once you see pool size as the number that keeps the database inside its efficient operating range, the counterintuitive sizing advice, the multi-pod arithmetic and most "the app hangs under load" incidents all explain themselves.
+
+---
+
+## 2. JDBC — the foundation
 
 **JDBC (Java Database Connectivity)** is the standard Java API for relational databases. Every higher-level tool — Hibernate, Spring Data, MyBatis, jOOQ — ultimately calls JDBC.
 
@@ -64,7 +72,7 @@ Bonus: the database can cache the execution plan for a repeated `PreparedStateme
 
 ---
 
-## 2. Connection pooling — the operationally critical part
+## 3. Connection pooling — the operationally critical part
 
 ### Why pool at all
 
@@ -188,7 +196,7 @@ hikaricp_connections_usage_seconds
 
 ---
 
-## 3. `JdbcTemplate` and `JdbcClient`
+## 4. `JdbcTemplate` and `JdbcClient`
 
 Spring's JDBC abstraction removes the boilerplate while keeping you in control of the SQL.
 
@@ -293,7 +301,7 @@ jdbc:postgresql://localhost:5432/vigil?reWriteBatchedInserts=true
 
 ---
 
-## 4. When to use JDBC instead of JPA
+## 5. When to use JDBC instead of JPA
 
 **This is a senior judgment call, and having an opinion is worth points.**
 
@@ -324,7 +332,7 @@ jdbc:postgresql://localhost:5432/vigil?reWriteBatchedInserts=true
 
 ---
 
-## 5. Spring's exception translation
+## 6. Spring's exception translation
 
 ```java
 try {
@@ -358,7 +366,7 @@ DataAccessException
 
 ---
 
-## 6. Build this
+## 7. Build & break
 
 **1. Get a real database running.** Postgres in Docker — you'll use this for the rest of the course:
 ```bash
@@ -433,9 +441,34 @@ Record the numbers. The gap between #1 and #3 is usually startling (often 10×+)
 
 **8. Watch the pool metrics.** Add Actuator + Micrometer, hit `/actuator/metrics/hikaricp.connections.active`, and observe it move under load. This is the metric you'll alert on in production.
 
+### Explain out loud (60s)
+
+1. Why parameterized queries are structurally safe, not just escaped.
+2. What `close()` does to a pooled connection, and what a leak costs you.
+3. The pool-sizing formula, and three reasons a bigger pool is slower.
+4. The multi-pod arithmetic, and what you'd check before scaling out.
+5. Two kinds of work where you'd skip JPA and use `JdbcClient`.
+
 ---
 
-## 7. Interview traps
+## 8. Production rules
+
+| Do / Never | Why |
+|---|---|
+| **Never build SQL by string concatenation** | Parameterization isn't escaping — the statement is parsed before values arrive, so a value structurally cannot become syntax |
+| **Watch native `@Query` strings and dynamically built SQL especially** | Everything else in Spring is parameterized for you; those two are the only places injection can still get in |
+| **Size the pool from cores, not from your thread count** | Roughly `cores × 2` — around ten for most services; 200 concurrent queries on four cores is the same work with every latency multiplied |
+| **Set `minimum-idle` equal to `maximum-pool-size` on a steady-state server** | Otherwise the pool churns connections, paying the 5–50ms setup cost repeatedly for no benefit |
+| **Multiply pool size by pod count and check it against `max_connections`** | Ten pods at twenty connections is 200 against a Postgres default of 100 — and you need headroom for migrations and an admin session |
+| **Always set `connection-timeout`** | A starved pool should fail fast with a clear error instead of hanging request threads until everything times out at once |
+| **Enable `leak-detection-threshold` outside production** | A connection that is never returned is gone from the pool permanently, and the leak is invisible until the pool is empty |
+| **Let Spring own connection acquisition and release** | `close()` on a pooled connection returns it rather than closing it; hand-managed connections are where leaks come from |
+| **Reach for `JdbcClient` for bulk, append-only and reporting work** | Entity semantics cost you nothing useful there, and skipping the ORM avoids loading a million rows to write or count them |
+| **Catch `DuplicateKeyException`, never a vendor error code** | `@Repository`'s translation makes the same handling work on Postgres and Oracle; `23505` is a string that will outlive your memory of it |
+
+---
+
+## 9. Interview traps
 
 **Q1. Why do we need connection pooling?**
 Opening a connection costs 5–50ms (TCP + TLS + auth + server-side session, and a process fork on Postgres). Doing it per query would dominate latency. A pool keeps connections open and lends them out; `close()` on a pooled connection returns it rather than closing it.
@@ -469,7 +502,7 @@ Measurably faster than C3P0/DBCP/Tomcat JDBC through lock-free data structures a
 
 ---
 
-## 8. Retention check
+## 10. Retention check
 
 1. What does `connection.close()` do on a pooled connection, and what mechanism makes that possible?
 2. Why is a 200-connection pool usually slower than a 10-connection pool?

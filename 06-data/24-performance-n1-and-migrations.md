@@ -6,7 +6,15 @@
 
 ---
 
-## Part 1 — The N+1 problem
+## Part 1 — The idea in one sentence
+
+> **Both halves of this lesson are about work that is invisible at the point you write it: `m.getOrganization().getName()` looks like a field access and is a network round trip, and `ALTER TABLE` looks instant and can freeze a table — so the discipline is making the invisible measurable, with query counts in tests and lock timeouts in migrations.**
+
+That is also why both fail in production rather than in review. N+1 scales with your data, and a migration's lock contention scales with your traffic; neither shows up against five rows on a laptop.
+
+---
+
+## Part 2 — The N+1 problem
 
 ### What it is
 
@@ -205,7 +213,7 @@ It "fixes" one call site by degrading every other query on that entity — and E
 
 ---
 
-## Part 2 — Query and index performance
+## Part 3 — Query and index performance
 
 ### Read the query plan
 
@@ -317,7 +325,7 @@ public void importMonitors(List<CreateMonitorRequest> requests) {
 
 ---
 
-## Part 3 — Database migrations
+## Part 4 — Database migrations
 
 ### Why `ddl-auto` is not a migration strategy
 
@@ -481,7 +489,7 @@ ALTER TABLE monitor ADD COLUMN region text;
 
 ---
 
-## Part 4 — Multi-tenancy (Vigil is multi-tenant)
+## Part 5 — Multi-tenancy (Vigil is multi-tenant)
 
 Three approaches, and you should be able to compare them:
 
@@ -529,7 +537,7 @@ CREATE POLICY tenant_isolation ON monitor
 
 ---
 
-## Part 5 — Build this
+## Part 6 — Build & break
 
 **1. ⭐ Create, observe, and fix an N+1.** Seed 100 monitors across 5 organizations. Write the naive `listMonitors` from §1. **Count the SQL statements in your log — you should see 101.** Then fix it five ways and count each time:
 - `JOIN FETCH`
@@ -573,9 +581,36 @@ WHERE monitor_id = '...' ORDER BY checked_at DESC LIMIT 100;
 
 **12. Multi-tenancy.** Add `org_id` to every table. Implement the tenant `Specification` predicate. Then write an integration test that creates data for two organizations and **asserts that org A's queries never return org B's rows.** Then deliberately remove the tenant filter from one repository method and confirm the test fails. **That test is a security control.**
 
+### Explain out loud (60s)
+
+1. What N+1 is, and the three places it hides that aren't a loop you wrote.
+2. How you'd *detect* it, and how you'd stop it coming back.
+3. Why `EAGER` is not a fix.
+4. The expand/contract sequence for renaming a column, deploy by deploy.
+5. Why `lock_timeout` matters more than the duration of the ALTER itself.
+
 ---
 
-## Part 6 — Interview traps
+## Part 7 — Production rules
+
+| Do / Never | Why |
+|---|---|
+| **Log Hibernate's SQL in development and never turn it off** | N+1 is invisible in Java and obvious in the log — you cannot find what you never look at |
+| **Assert query counts in tests for every list endpoint** | It turns a performance bug into a failing build; without it, the regression returns the first time someone adds a field to a DTO |
+| **Fetch associations explicitly with a join fetch or an entity graph** | The fix belongs in the query, where it is visible and per-call, not in a mapping that affects every other query |
+| **Never "fix" N+1 by switching an association to `EAGER`** | It can't be overridden per query, so it repairs one call site by degrading every other query that touches the entity |
+| **Watch for N+1 hiding in a `log.debug`** | With debug off the queries don't happen, so the bug appears only when someone enables logging to investigate something else |
+| **Set `open-in-view: false`** | Otherwise lazy getters fire during serialization, which puts your queries in the view layer where no profiler is looking |
+| **Never use `ddl-auto: update` as a migration strategy** | It never drops or renames, applies silently in whatever order Hibernate chooses, and leaves environments quietly divergent |
+| **Name Flyway migrations `V<version>__<description>.sql` with two underscores** | One underscore is a silent no-op, so the migration simply never runs and nothing tells you |
+| **Never edit an applied migration; write a new one** | Flyway checksums each file precisely so every environment is guaranteed to have run identical SQL |
+| **Never make a breaking schema change in one deploy** | Old and new code run simultaneously during a rolling deploy — expand, migrate, then contract across releases |
+| **Set `lock_timeout` before any `ALTER TABLE`** | An ALTER waits on a conflicting lock, and every later query queues behind the waiting ALTER — a "quick" migration freezes the table |
+| **Never put a multi-million-row `UPDATE` in a startup migration** | The app can't start until it finishes, so your deploy becomes an outage; backfill in batches from a job instead |
+
+---
+
+## Part 8 — Interview traps
 
 **Q1. What is the N+1 problem?**
 One query loads N parents, then accessing a lazy association on each fires one query per parent — N+1 total. It's dangerous because `entity.getX()` looks like a field access, so it's invisible in the code and scales with data, appearing in production long after the code shipped.
@@ -624,7 +659,7 @@ Every persisted entity stays in the persistence context with a dirty-check snaps
 
 ---
 
-## Part 7 — Retention check
+## Part 9 — Retention check
 
 1. Give five ways an N+1 can hide, including the one involving a log statement.
 2. Why is a query-count test more valuable than knowing how to fix an N+1?

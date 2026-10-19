@@ -1,12 +1,20 @@
 # Lesson 20 — JPA & Hibernate fundamentals
 
-> **This is the most important lesson in Module 6.** The **persistence context** is the concept that explains almost every surprising JPA behaviour: why an entity saves without `save()`, why you get `LazyInitializationException`, why `save()` sometimes issues no SQL, why an update fires at a moment you didn't choose. Most people who use JPA daily cannot explain it. Learn it properly and you'll debug things your colleagues consider mysterious.
+> **Why this lesson exists:** this is the most important lesson in Module 6. The **persistence context** is the concept that explains almost every surprising JPA behaviour: why an entity saves without `save()`, why you get `LazyInitializationException`, why `save()` sometimes issues no SQL, why an update fires at a moment you didn't choose. Most people who use JPA daily cannot explain it. Learn it properly and you'll debug things your colleagues consider mysterious.
 
 **Time:** ~90 minutes · **Prereq:** Lesson 19
 
 ---
 
-## 1. What JPA is, and what it isn't
+## 1. The idea in one sentence
+
+> **The persistence context is a transaction-scoped map of managed entities plus a snapshot of how each one looked when it was loaded — and nearly every surprising JPA behaviour is either that snapshot being compared at flush, or an entity having fallen out of the map.**
+
+Dirty checking without `save()`, the silent write from a GET, `LazyInitializationException`, deferred and reordered SQL: one mechanism, four symptoms. Ask "is this entity managed, and what does its snapshot say?" and the mystery usually evaporates.
+
+---
+
+## 2. What JPA is, and what it isn't
 
 | | |
 |---|---|
@@ -46,7 +54,7 @@ Objects and relational tables model the world differently, and the gaps are wher
 
 ---
 
-## 2. The persistence context — the core concept
+## 3. The persistence context — the core concept
 
 > **The persistence context is a first-level cache and change tracker for managed entities, scoped to a transaction.**
 
@@ -189,7 +197,7 @@ public <S extends T> S save(S entity) {
 
 ---
 
-## 3. Flush — when does SQL actually run?
+## 4. Flush — when does SQL actually run?
 
 ```java
 FlushModeType.AUTO    // default: before a query that could be affected, and at commit
@@ -239,7 +247,7 @@ Fix: `flush()` after the delete, or reuse the existing row. Knowing *why* it hap
 
 ---
 
-## 4. Identity generation, and the trap in each strategy
+## 5. Identity generation, and the trap in each strategy
 
 ```java
 @Id @GeneratedValue(strategy = GenerationType.IDENTITY)   Long id;   // DB auto-increment
@@ -284,7 +292,7 @@ Hibernate fetches 50 IDs per round trip instead of one. **`allocationSize` must 
 
 ---
 
-## 5. Lazy loading and `LazyInitializationException`
+## 6. Lazy loading and `LazyInitializationException`
 
 ```java
 @Entity
@@ -383,7 +391,7 @@ Buys you:
 
 ---
 
-## 6. Build this
+## 7. Build & break
 
 **1. Set up JPA.**
 ```xml
@@ -460,9 +468,34 @@ Match the log markers to the SQL. **Then call `repo.saveAndFlush(...)` instead a
 
 **10. Prove the `save()` extra SELECT.** With an assigned UUID id, save a new entity and watch for a `SELECT` before the `INSERT` — that's `merge()`. Then implement `Persistable<UUID>` with an `isNew` transient flag and watch the SELECT disappear.
 
+### Explain out loud (60s)
+
+1. What the persistence context is, mechanically, in one sentence.
+2. How dirty checking works, and why `save()` isn't needed.
+3. The detached-entity trap, and why it fails silently.
+4. Why `@Transactional(readOnly = true)` on reads is a correctness measure, not an optimization.
+5. One reason `open-in-view: true` is a trap, in terms of where the queries end up running.
+
 ---
 
-## 7. Interview traps
+## 8. Production rules
+
+| Do / Never | Why |
+|---|---|
+| **Put `@Transactional(readOnly = true)` on every read path** | Changes to a managed entity are written at flush whether you meant them or not — read-only makes an accidental mutation harmless instead of silent |
+| **Never mutate an entity you only intended to read** | `m.setName(m.getName().trim())` inside a GET is a database write; nothing in the code says so |
+| **Never load an entity outside a transaction and expect changes to persist** | The context closes with the transaction, so the entity is detached and your setter writes to nothing — no UPDATE, no error |
+| **Don't call `save()` on an already-managed entity** | Dirty checking already handles it; the habit hides the fact that you don't know whether your entity is managed |
+| **Set `open-in-view: false` explicitly** | The default is `true`, which keeps the context open through view rendering and turns every lazy getter in your serializer into a query |
+| **Keep every to-one association `LAZY`** | `EAGER` can't be overridden per query, so one convenient default degrades every other query that touches the entity |
+| **Know what your ID generator costs** | `IDENTITY` forces an immediate INSERT on `save()`, which disables batching entirely — a surprise only visible in the SQL log |
+| **Never serialize an entity outside its transaction** | Jackson calls every getter, so a lazy association either explodes with `LazyInitializationException` or quietly fetches a million rows |
+| **Never rely on the order of your `save()` calls** | Hibernate defers and reorders statements at flush to respect foreign keys and enable batching; your call order is not the SQL order |
+| **Turn on `org.hibernate.SQL` logging and leave it on while learning** | JPA's whole difficulty is the distance between what you wrote and what it ran; the log closes that distance |
+
+---
+
+## 9. Interview traps
 
 **Q1. What is the persistence context?**
 A transaction-scoped first-level cache and change tracker for managed entities — effectively a map from entity key to instance, plus a snapshot of each entity's loaded state. It provides identity guarantees (one row = one object per context), automatic dirty checking, and write-behind (deferred, batchable SQL).
@@ -502,7 +535,7 @@ Hibernate skips dirty-check snapshots (less memory/CPU and no accidental flushes
 
 ---
 
-## 8. Retention check
+## 10. Retention check
 
 1. Define the persistence context in one sentence, then name the three things it gives you.
 2. Explain, mechanically, why an entity updates without `save()`.
