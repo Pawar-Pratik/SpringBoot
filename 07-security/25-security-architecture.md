@@ -6,7 +6,15 @@
 
 ---
 
-## 1. The mental model
+## 1. The idea in one sentence
+
+> **Spring Security is one servlet filter delegating to an ordered chain of small filters, each with a single job — so every 401, every 403, and every "my config does nothing" is answered by knowing which filter ran, in what order, and what it decided.**
+
+That chain also tells you where your code *isn't*. Authentication and authorization finish before your controller exists, which is why security belongs in configuration rather than in `if` statements, and why 401/403 responses never reach your `@ControllerAdvice`.
+
+---
+
+## 2. The mental model
 
 Spring Security is **one servlet `Filter`** that delegates to a chain of internal filters.
 
@@ -58,7 +66,7 @@ The servlet container creates filters; it knows nothing about Spring beans. `Del
 
 ---
 
-## 2. The core objects
+## 3. The core objects
 
 ```java
 // Authentication — the current principal, and the answer to "who is this?"
@@ -116,7 +124,7 @@ That one abstraction makes every service test trivial instead of requiring a `Se
 
 ---
 
-## 3. The authentication flow
+## 4. The authentication flow
 
 ```
    Request with credentials
@@ -216,7 +224,7 @@ public class VigilUserDetails implements UserDetails {
 
 ---
 
-## 4. 401 vs 403 — the debugging skill
+## 5. 401 vs 403 — the debugging skill
 
 **`ExceptionTranslationFilter` is where the distinction is made:**
 
@@ -274,7 +282,7 @@ SecurityFilterChain chain(HttpSecurity http) throws Exception {
 
 ---
 
-## 5. Password encoding
+## 6. Password encoding
 
 ```java
 @Bean
@@ -305,7 +313,7 @@ So it can **verify old hashes while writing new ones with a stronger algorithm**
 
 ---
 
-## 6. Configuring the filter chain
+## 7. Configuring the filter chain
 
 ```java
 @Configuration
@@ -401,7 +409,7 @@ Spring Security sets most of these automatically. **CSP is the notable exception
 
 ---
 
-## 7. CSRF — when you need it and when you don't
+## 8. CSRF — when you need it and when you don't
 
 **The attack:** you're logged into `vigil.io`. You visit `evil.com`, which contains:
 ```html
@@ -436,7 +444,7 @@ And set `SameSite=Lax` or `Strict` on the auth cookie — which mitigates most C
 
 ---
 
-## 8. Build this — Vigil's authentication
+## 9. Build & break — Vigil's authentication
 
 **1. Add security and observe the default.**
 ```xml
@@ -478,9 +486,33 @@ Then fix it with `DelegatingSecurityContextTaskExecutor` and confirm the identit
 
 **10. Deny-by-default, proven.** Add a brand-new endpoint with no security rule. Confirm it requires authentication because of `anyRequest().authenticated()`. Then change that line to `permitAll()` and confirm the new endpoint is now **publicly exposed by accident.** That contrast is why deny-by-default is non-negotiable.
 
+### Explain out loud (60s)
+
+1. The filter chain, naming the filters that decide 401 vs 403 and why their order matters.
+2. What `DelegatingFilterProxy` bridges, and why it has to exist.
+3. Why `SecurityContextHolder` is empty inside `@Async`, and the correct fix.
+4. The `ROLE_` prefix bug: the symptom, the cause, and two fixes.
+5. Why 401 and 403 responses bypass your `@ControllerAdvice`.
+
 ---
 
-## 9. Interview traps
+## 10. Production rules
+
+| Do / Never | Why |
+|---|---|
+| **End every chain with `anyRequest().authenticated()`** | Deny-by-default means a new endpoint is protected the moment it exists; a `permitAll()` catch-all silently publishes the next one someone writes |
+| **Never write authorization checks in a controller** | The decision has already been made by the time your method runs, so a check there is both redundant and the one place it can be forgotten |
+| **Pick `hasRole` + the `ROLE_` prefix, or `hasAuthority` without it, and be consistent** | `hasRole("ADMIN")` looks for `ROLE_ADMIN`; a mismatch produces a 403 for a user who genuinely has the role, and nothing says why |
+| **Disable CSRF only for stateless token APIs, and know that's why** | With cookies, CSRF protection is load-bearing; disabling it because a POST returned 403 is how a real control gets removed by accident |
+| **Never use `MODE_INHERITABLETHREADLOCAL` with a thread pool** | A pooled thread inherits whichever request first created it and keeps that identity forever — use `DelegatingSecurityContextTaskExecutor` |
+| **Wrap `SecurityContextHolder` behind a small interface in service code** | It makes every service test a plain constructor call instead of a `SecurityContext` setup, and keeps business logic off a static holder |
+| **Use the delegating `PasswordEncoder` with its `{bcrypt}` prefixes** | The prefix records which algorithm hashed each password, so you can migrate algorithms without invalidating every existing login |
+| **Write `AuthenticationEntryPoint` and `AccessDeniedHandler` for 401 and 403 bodies** | They happen in the filter chain, before `DispatcherServlet`, so your `@ControllerAdvice` never sees them and the format would otherwise be inconsistent |
+| **Turn on `org.springframework.security=DEBUG` before theorising about a 403** | It prints the chain and the deciding filter, which is the difference between a minute and an afternoon |
+
+---
+
+## 11. Interview traps
 
 **Q1. How does Spring Security work?** *(the flagship question)*
 It's a single servlet filter (`DelegatingFilterProxy` → `FilterChainProxy`) that selects one `SecurityFilterChain` per request and runs an ordered list of focused filters: context loading, headers, CORS, CSRF, then authentication filters that build an `Authentication` and place it in the `SecurityContextHolder`, then `ExceptionTranslationFilter`, and finally `AuthorizationFilter`. All of this happens **before** `DispatcherServlet`, so a controller only executes for authenticated, authorized requests.
@@ -523,7 +555,7 @@ Multiple `SecurityFilterChain` beans, each with a `securityMatcher`, ordered wit
 
 ---
 
-## 10. Retention check
+## 12. Retention check
 
 1. Draw the filter chain from memory, naming at least six filters in order.
 2. Where exactly is the 401-vs-403 decision made, and what determines it?

@@ -6,7 +6,15 @@
 
 ---
 
-## 1. Sessions vs tokens — the actual trade-off
+## 1. The idea in one sentence
+
+> **A JWT's only security property is integrity: the payload is readable by anyone holding it, and it stays valid until `exp` no matter what you do — so "stateless auth" is a trade, and the moment you need real revocation you have bought state back.**
+
+Say both halves and you've out-answered most candidates. The signature proves nobody edited the claims; it proves nothing about secrecy, freshness, or whether you still want that user to be an admin.
+
+---
+
+## 2. Sessions vs tokens — the actual trade-off
 
 ### Session-based (the traditional approach)
 
@@ -52,7 +60,7 @@ That answer demonstrates judgment rather than pattern-matching, and it's a genui
 
 ---
 
-## 2. JWT structure
+## 3. JWT structure
 
 ```
 eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI3ZjNhIiwib3JnIjoiYTFiMiJ9.SflKxwRJSMeKK...
@@ -94,7 +102,7 @@ eyJhbGciOiJSUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiI3ZjNhIiwib3JnIjoiYTFiMiJ9.SflKxw
 
 ---
 
-## 3. The security mistakes — this section is the point of the lesson
+## 4. The security mistakes — this section is the point of the lesson
 
 ### ❌ Mistake 1 — the `alg: none` attack
 
@@ -142,7 +150,7 @@ Covered in §5 — the most-debated point in the topic and worth getting right.
 
 ---
 
-## 4. Access + refresh tokens
+## 5. Access + refresh tokens
 
 ```
 ┌──────────────────────────────────────────────────────────────────────────┐
@@ -207,7 +215,7 @@ This is the OAuth 2.0 Security BCP recommendation for public clients, and **desc
 
 ---
 
-## 5. Where to store the token on the client
+## 6. Where to store the token on the client
 
 **The most contested question in the topic. Know both sides.**
 
@@ -245,7 +253,7 @@ ResponseCookie cookie = ResponseCookie.from("refresh_token", token)
 
 ---
 
-## 6. Revocation — the hard problem
+## 7. Revocation — the hard problem
 
 **A signed JWT is valid until `exp`. There is no way to un-issue it.** So:
 
@@ -271,7 +279,7 @@ ResponseCookie cookie = ResponseCookie.from("refresh_token", token)
 
 ---
 
-## 7. Implementation in Spring
+## 8. Implementation in Spring
 
 ### The recommended way: `oauth2-resource-server`
 
@@ -403,7 +411,7 @@ Bump the user's `token_version` on password change, role change, or "log out eve
 
 ---
 
-## 8. Build this — Vigil's auth endpoints
+## 9. Build & break — Vigil's auth endpoints
 
 **1. Endpoints:**
 ```
@@ -454,9 +462,37 @@ GET  /api/v1/auth/me          → current user + org + roles
 ```
 **These tests are worth more on a resume than the feature itself.** Almost nobody writes negative security tests, and a reviewer who sees them draws immediate conclusions about how you work.
 
+### Explain out loud (60s)
+
+1. What a JWT's signature guarantees, and what it does not.
+2. The honest sessions-vs-JWT comparison, and when you'd pick a session.
+3. Refresh token rotation and reuse detection — including why revoking the legitimate token is correct.
+4. Three ways to revoke, and what each one costs.
+5. The stale-claims problem, with the demoted-admin example.
+
 ---
 
-## 9. Interview traps
+## 10. Production rules
+
+| Do / Never | Why |
+|---|---|
+| **Never put anything secret in a JWT** | Header and payload are base64url, not encrypted — anyone with the token reads every claim, as jwt.io demonstrates in five seconds |
+| **Pin the expected algorithm on the verifier and reject anything else** | `alg: none` and algorithm confusion both work by letting the *token* choose how it's validated |
+| **Validate `exp`, `nbf`, `iss` and `aud`, not just the signature** | A perfectly signed token issued for another service is still a cross-service replay unless you check who it was addressed to |
+| **HS256 when one service issues and verifies; RS256/ES256 when several verify** | Distributing a public key is safe; distributing a shared secret means any holder can forge tokens for everyone |
+| **Keep access tokens to 5–15 minutes** | The breach window for a token you cannot revoke *is* its lifetime, and short expiry is the one mitigation that costs nothing |
+| **Make refresh tokens opaque random strings, and store only their hash** | You're storing them server-side anyway, so a JWT buys nothing — and a plaintext refresh table is a set of long-lived credentials waiting to leak |
+| **Generate every token with `SecureRandom`, never `Random`** | `Random` is a linear congruential generator: a few outputs reveal all future ones, which for a password-reset token is total compromise |
+| **Rotate refresh tokens and revoke the whole family on reuse** | Rotation makes each one single-use, so a second use proves someone has a copy — you can't tell which party, so you evict both |
+| **Use `oauth2-resource-server`; never hand-roll a JWT filter** | Signature verification, claim validation, JWKS fetching, `kid` selection, key rotation and a correct `WWW-Authenticate` are all already correct there |
+| **Check `setAuthorityPrefix` on your `JwtAuthenticationConverter`** | It prefixes `SCOPE_` by default, so a `ROLE_ADMIN` claim becomes `SCOPE_ROLE_ADMIN` and `hasRole` fails mystifyingly |
+| **Prefer `httpOnly; Secure; SameSite=Strict` cookies for browser clients** | XSS cannot read them; `localStorage` is readable by any injected script, and the access token can live in memory instead |
+| **Add a `token_version` claim when privilege reduction must take effect now** | Otherwise a demoted admin keeps `ROLE_ADMIN` until their token expires — the stale-claims gap people forget entirely |
+| **Say out loud that a blacklist makes JWT stateful** | Once there's a lookup per request you have a session with extra steps, and choosing a session deliberately is the better engineering |
+
+---
+
+## 11. Interview traps
 
 **Q1. What is a JWT and what are its parts?**
 Header (algorithm, key id), payload (claims), signature — base64url-encoded and dot-separated. The header and payload are **encoded, not encrypted**: anyone with the token can read every claim. The signature provides integrity and authenticity only.
@@ -499,7 +535,7 @@ Claims are frozen at issue time. Demote a user at 10:00 and their token still sa
 
 ---
 
-## 10. Retention check
+## 12. Retention check
 
 1. What exactly does a JWT signature guarantee, and what does it not?
 2. Explain refresh token rotation and why reuse detection revokes tokens that were legitimately issued.

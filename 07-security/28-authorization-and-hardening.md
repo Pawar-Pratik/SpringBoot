@@ -6,7 +6,15 @@
 
 ---
 
-## 1. Roles vs authorities vs permissions
+## 1. The idea in one sentence
+
+> **Authentication is a framework problem you configure once; authorization is "may *this* user do *this* to *this specific row*", which no framework can answer for you — which is exactly why broken access control is first on the OWASP Top 10.**
+
+The practical consequence runs through the whole lesson: prefer controls that can't be forgotten. A tenant-scoped query beats a check after loading, row-level security beats both, and a separate Actuator port beats any amount of correct configuration.
+
+---
+
+## 2. Roles vs authorities vs permissions
 
 Spring Security has exactly one concept: **`GrantedAuthority`**, a string. Everything else is convention.
 
@@ -52,7 +60,7 @@ public void deleteMonitor(UUID id) { }
 
 ---
 
-## 2. Where to enforce authorization
+## 3. Where to enforce authorization
 
 ```
 ┌─ URL-based:      HttpSecurity.authorizeHttpRequests()      coarse, in one place
@@ -187,7 +195,7 @@ CREATE POLICY tenant_isolation ON monitor
 
 ---
 
-## 3. Multi-tenant authorization — the Vigil model
+## 4. Multi-tenant authorization — the Vigil model
 
 Vigil's structure: a user belongs to multiple **organizations** with a **role in each**. So "am I an admin?" is meaningless without "of which organization?"
 
@@ -245,7 +253,7 @@ Set it in a filter after authentication, clear it in a `finally`. **The `clear()
 
 ---
 
-## 4. The OWASP issues that actually appear in Spring apps
+## 5. The OWASP issues that actually appear in Spring apps
 
 ### A01 — Broken Access Control (#1, and by a wide margin)
 
@@ -322,7 +330,7 @@ Log authentication successes and failures, authorization denials, and admin acti
 
 ---
 
-## 5. Securing Actuator
+## 6. Securing Actuator
 
 Actuator endpoints are extremely useful and extremely dangerous.
 
@@ -362,7 +370,7 @@ management:
 
 ---
 
-## 6. Build this — securing Vigil properly
+## 7. Build & break — securing Vigil properly
 
 **1. The permission model.** `OrgRole` enum with permission sets. `VigilUserDetails` with `Map<UUID, OrgRole>`. `hasPermission(orgId, permission)`.
 
@@ -415,9 +423,39 @@ void userCannotReadAnotherOrgsMonitor() throws Exception {
 @Test void massAssignmentOfOrgIdIsIgnored() { }
 ```
 
+### Explain out loud (60s)
+
+1. Why no framework can solve authorization for you.
+2. IDOR: the bug, the query-scoping fix, and why it beats a check after loading.
+3. Why 404 rather than 403 across tenants.
+4. Why a self-invoked `@PreAuthorize` method is a security bug, not a performance one.
+5. Three Actuator endpoints that must never be public, and the control that makes it moot.
+
 ---
 
-## 7. Interview traps
+## 8. Production rules
+
+| Do / Never | Why |
+|---|---|
+| **Model roles as bundles of permissions, and have code check permissions** | Roles are business vocabulary that changes; a new "Billing Manager" role should be one enum constant, not an edit to every `@PreAuthorize` |
+| **Scope the query by tenant rather than checking ownership after loading** | You cannot forget the check *and* return the object if the object is never loaded — authorization becomes data access rather than a separate step |
+| **Return 404, not 403, for another tenant's resource** | A 403 confirms the row exists, which is an ID-enumeration oracle; "not found" is both safer and truthful in your tenant |
+| **Never take the tenant from the request body** | It is client input; the tenant must come from the authenticated principal, and even a path variable must be validated against real memberships |
+| **Never call a `@PreAuthorize` method via `this.`** | Method security is proxy-based, so a self-invoked call runs with no check at all — a silent authorization bypass, not a performance quirk |
+| **Use `@PreAuthorize`, not `@Secured` or `@RolesAllowed`** | Only `@PreAuthorize` supports SpEL, which is what lets you express object-level and permission-based rules at all |
+| **Avoid `@PostFilter` on anything paginated** | It loads everything and discards after the fact, so your page sizes become wrong as well as your performance |
+| **Add row-level security for multi-tenant data** | It is the layer that still holds when your application code has a bug, which is the only kind of control that survives a bad day |
+| **Clear any `TenantContext` `ThreadLocal` in a `finally`** | Worker threads are pooled, so a stale tenant on a reused thread serves one customer's data to another |
+| **Run Actuator on a separate port** | Your ingress then exposes only 8080, so `/env` and `/heapdump` are unreachable regardless of how the application is configured |
+| **Never expose `/heapdump` or `/env`** | A heap dump is every password, token and PII value in plaintext, and both are standard findings in internet-wide scans |
+| **Never build a SpEL expression from user input** | Evaluating user-supplied SpEL is remote code execution, and it has produced real Spring CVEs |
+| **Use `@JsonTypeInfo(use = NAME)` with an explicit `@JsonSubTypes` allowlist** | Class-based polymorphic typing lets an attacker choose which class to instantiate, which is deserialization RCE |
+| **Scan dependencies and fail the build on high CVSS** | Log4Shell and Spring4Shell were both dependency problems, and the gap is always between disclosure and your next upgrade |
+| **Defend SSRF in the app *and* at the network layer** | Application validation is defence in depth; network isolation is the control that holds when the validation has a gap |
+
+---
+
+## 9. Interview traps
 
 **Q1. Difference between roles and authorities in Spring Security?**
 Mechanically none — both are `GrantedAuthority` strings. By convention roles are coarse (`ROLE_ADMIN`) and permissions fine (`monitors:delete`). `hasRole("X")` prepends `ROLE_`; `hasAuthority("X")` is literal.
@@ -457,7 +495,7 @@ Redact in the request-logging filter (query strings carry tokens and API keys), 
 
 ---
 
-## 8. Retention check
+## 10. Retention check
 
 1. Why check permissions rather than roles, framed as a change-cost argument?
 2. Explain IDOR and give the strongest fix, plus why it beats a post-load check.

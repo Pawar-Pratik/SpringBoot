@@ -6,7 +6,15 @@
 
 ---
 
-## 1. The distinction that clears up all the confusion
+## 1. The idea in one sentence
+
+> **OAuth2 is about permissions and OIDC is about identity — "Sign in with Google" is OIDC riding on OAuth2's authorization code flow — and almost every confusion and every attack in this area comes from using an access token to answer a question only an ID token can answer.**
+
+The access token says what its bearer may do, for an audience that isn't you. The ID token says who the user is, addressed to you, with an `aud` and a `nonce` you are required to check. Keep those two apart and the protocol stops being mysterious.
+
+---
+
+## 2. The distinction that clears up all the confusion
 
 | | Answers | Protocol | Gives you |
 |---|---|---|---|
@@ -32,7 +40,7 @@ Note that **Vigil is a client** when it offers "Sign in with Google," and a **re
 
 ---
 
-## 2. The authorization code flow with PKCE
+## 3. The authorization code flow with PKCE
 
 **This is *the* flow. Learn to draw it.** It's what you use for web apps, SPAs, and mobile apps — essentially everything now.
 
@@ -110,7 +118,7 @@ Note that **Vigil is a client** when it offers "Sign in with Google," and a **re
 
 ---
 
-## 3. The other flows — know which are dead
+## 4. The other flows — know which are dead
 
 | Flow | Use | Status |
 |---|---|---|
@@ -132,7 +140,7 @@ No user, no browser, no redirect. **This is how Vigil's check-worker service aut
 
 ---
 
-## 4. The ID token
+## 5. The ID token
 
 ```json
 {
@@ -189,7 +197,7 @@ This also lets one Vigil user link multiple providers (Google *and* GitHub), whi
 
 ---
 
-## 5. Two attacks worth knowing by name
+## 6. Two attacks worth knowing by name
 
 ### The confused deputy / access token substitution attack
 
@@ -210,7 +218,7 @@ If the authorization server allows loose `redirect_uri` matching, an attacker cr
 
 ---
 
-## 6. Spring Security implementation
+## 7. Spring Security implementation
 
 ### As an OAuth2 client (social login)
 
@@ -364,7 +372,7 @@ Spring stores the authorized client (with its refresh token) and refreshes it tr
 
 ---
 
-## 7. Identity providers, and the build-vs-buy question
+## 8. Identity providers, and the build-vs-buy question
 
 | Provider | Notes |
 |---|---|
@@ -382,7 +390,7 @@ Spring stores the authorized client (with its refresh token) and refreshes it tr
 
 ---
 
-## 8. Build this — Google sign-in for Vigil
+## 9. Build & break — Google sign-in for Vigil
 
 **1. Register an OAuth client.** Google Cloud Console → Credentials → OAuth client ID → Web application. Authorized redirect URI: `http://localhost:8080/login/oauth2/code/google`. **Note that Google requires an exact match** — the open-redirect defence from §5, enforced by the provider.
 
@@ -414,9 +422,36 @@ docker run -p 8081:8080 -e KC_BOOTSTRAP_ADMIN_USERNAME=admin -e KC_BOOTSTRAP_ADM
 ```
 Create a realm and client, then configure Vigil with `issuer-uri: http://localhost:8081/realms/vigil`. **Fetch `/.well-known/openid-configuration` in a browser and read it** — you'll see exactly what discovery gives you. Then enable MFA in Keycloak and note that **Vigil needed zero changes** to support it. *That's* the argument for delegating identity, demonstrated.
 
+### Explain out loud (60s)
+
+1. OAuth2 vs OIDC in one sentence, and which one "Sign in with Google" is.
+2. The authorization code flow with PKCE, naming what each of `code`, `state`, `nonce` and the verifier prevents.
+3. The confused-deputy attack, and the single claim that stops it.
+4. Why keying users on email is an account-takeover vector.
+5. Which flows are dead, and the specific reason for each.
+
 ---
 
-## 9. Interview traps
+## 10. Production rules
+
+| Do / Never | Why |
+|---|---|
+| **Authenticate with the ID token, validating `aud` and `nonce`** | An access token carries no obligation to check who it was issued for, which is exactly the confused-deputy attack |
+| **Never dereference a client-supplied access token to log someone in** | A token minted for `evil.com` will happily answer `/userinfo`, and nothing in it stops you accepting the answer |
+| **Never let a client inspect an access token** | It may be opaque, its format may change without notice, and its audience is a different party entirely |
+| **Key users on `(iss, sub)`, never on email** | Emails change and get reassigned, and matching on them hands an existing account to whoever can register that address |
+| **Check `email_verified` before trusting an email for anything** | A provider that doesn't verify addresses plus email-matching is a documented account-takeover path in real products |
+| **Use authorization code + PKCE for every user-facing client** | PKCE started as a mobile defence and is now recommended for confidential clients too — OAuth 2.1 makes it mandatory |
+| **Use client credentials for service-to-service, never a user's token** | Machine callers have no user; borrowing one makes the audit trail lie and ties a background job to someone's account |
+| **Never use the implicit or password (ROPC) flows** | Implicit puts a long-lived credential in the URL bar; ROPC hands the user's password to the app, defeating OAuth and breaking MFA |
+| **Register exact redirect URIs, never patterns** | A loose `redirect_uri` is an open redirect that leaks authorization codes, which is why providers enforce exact matching |
+| **Let Spring generate and validate `state`; never disable it** | Without it an attacker can link a victim's session to the attacker's provider account via a crafted callback |
+| **Prefer `issuer-uri` and OIDC Discovery over hand-listing endpoints** | One line fetches the authorization, token and JWKS endpoints and the supported algorithms, and keeps working through provider changes |
+| **Remember GitHub is OAuth2, not OIDC** | There is no ID token, so you need `OAuth2UserService` and a `/user/emails` call — and the user's email may be private |
+
+---
+
+## 11. Interview traps
 
 **Q1. OAuth2 vs OIDC?**
 OAuth2 is an **authorization** framework: it lets an app act on a user's behalf with scoped permissions, without the user sharing credentials, and yields an **access token** for calling APIs. OIDC is an **authentication** layer on top of it, adding an **ID token** (a JWT with standard identity claims), a `/userinfo` endpoint, and discovery. "Sign in with Google" is OIDC.
@@ -459,7 +494,7 @@ GitHub is OAuth2 only, with no OIDC ID token, so you use `OAuth2UserService` and
 
 ---
 
-## 10. Retention check
+## 12. Retention check
 
 1. Give the one-sentence distinction between OAuth2 and OIDC.
 2. Draw the authorization code flow, naming `state`, `nonce`, and PKCE and what each prevents.
