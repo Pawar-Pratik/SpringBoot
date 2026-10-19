@@ -6,7 +6,15 @@
 
 ---
 
-## 1. `@Async`
+## 1. The idea in one sentence
+
+> **Everything in this lesson works perfectly on one instance and breaks on two: `@Scheduled` has no cluster awareness, `@Async` inherits no context, and an event published before commit announces work that may never have happened.**
+
+So the question to ask of every piece of background work is the same one: what happens when there are three of these running, on different threads, and one of the transactions rolls back?
+
+---
+
+## 2. `@Async`
 
 ```java
 @Configuration
@@ -153,7 +161,7 @@ public class ContextPropagatingTaskDecorator implements TaskDecorator {
 
 ---
 
-## 2. `@Scheduled`
+## 3. `@Scheduled`
 
 ```java
 @Configuration
@@ -402,7 +410,7 @@ public class CheckDispatcher {
 
 ---
 
-## 3. Application events
+## 4. Application events
 
 ### Basics
 
@@ -527,7 +535,7 @@ public class OutboxPublisher {
 
 ---
 
-## 4. Build this — Vigil's check engine
+## 5. Build & break — Vigil's check engine
 
 **This is the heart of the project.** Everything so far has been infrastructure; this is the feature.
 
@@ -574,9 +582,38 @@ SELECT claimed_by, count(*) FROM monitor GROUP BY claimed_by;
 
 **10. Verify graceful shutdown.** With `waitForTasksToCompleteOnShutdown(true)`, submit a long task and send SIGTERM. Confirm it finishes. Then set it `false` and confirm it's abandoned mid-flight. **That's the difference between a clean deploy and lost work** (Lesson 08 §2).
 
+### Explain out loud (60s)
+
+1. Why the default `@Async` executor is a hazard, and what virtual threads do and don't fix.
+2. `fixedDelay` vs `fixedRate`, and the failure mode of getting it wrong.
+3. Two ways a `@Scheduled` job dies silently.
+4. The multi-instance problem, and the difference between ShedLock and `SKIP LOCKED`.
+5. The outbox pattern, and the consequence you must accept with it.
+
 ---
 
-## 5. Interview traps
+## 6. Production rules
+
+| Do / Never | Why |
+|---|---|
+| **Never use the default `@Async` executor** | `SimpleAsyncTaskExecutor` creates an unbounded thread per task; with virtual threads it merely moves the failure to the connection pool or downstream rate limit |
+| **Choose queue size deliberately, knowing `maxPoolSize` is often unreachable** | With a large queue the pool stays at core size until the queue fills, so `max=100` can behave as 4 threads with invisible latency |
+| **Prefer `CallerRunsPolicy` for internal producers** | It applies natural backpressure by making the producer do the work, so it stops producing — but it's wrong at the HTTP boundary, where the caller is a request thread |
+| **Install a `TaskDecorator` to carry MDC, security and tenant context** | They are all `ThreadLocal`-backed, and a pooled thread retaining the previous task's tenant is a cross-tenant leak |
+| **Clear the propagated context in a `finally`** | Half the decorator is the copy; the other half is making sure it doesn't outlive the task on a reused thread |
+| **Use `fixedDelay` unless you genuinely need a fixed cadence** | With `fixedRate`, a task that occasionally runs long queues invocations and — on the single-threaded default — falls permanently behind |
+| **Give `@Scheduled` its own pool and an `ErrorHandler`** | All scheduled methods share one thread by default, and an uncaught exception cancels that task permanently with no alert until restart |
+| **Always set `zone` on a cron expression, and remember Spring's cron has six fields** | Otherwise your 2am job moves with the server's DST, and a copied Unix crontab line shifts every field |
+| **Never deploy `@Scheduled` to multiple instances without ShedLock or work claiming** | Every instance runs every schedule, and it only breaks when you scale — exactly when nobody is looking for it |
+| **Use `SELECT … FOR UPDATE SKIP LOCKED` to distribute work, ShedLock to deduplicate a singleton job** | They solve different problems: one hands each replica a disjoint batch, the other just stops a job running twice |
+| **Use `.usingDbTime()` with ShedLock** | It makes the database clock authoritative, which removes clock skew between application servers as a failure mode |
+| **Use `@TransactionalEventListener(AFTER_COMMIT)` for side effects** | A plain listener fires inside the transaction, so a later rollback leaves you having announced an incident that doesn't exist |
+| **Reach for an outbox when a message must not be lost** | Only writing the message in the same transaction makes "it happened" and "it will be sent" one atomic fact — and accept that delivery becomes at-least-once |
+| **Ask "would this operation be wrong if nobody handled it?" before publishing an event** | If yes, call the method directly; events make control flow invisible, and overusing them produces a system nobody can trace |
+
+---
+
+## 7. Interview traps
 
 **Q1. What's wrong with the default `@Async` executor?**
 It's a `SimpleAsyncTaskExecutor` — a new thread per call, unbounded and unpooled, so a burst of work exhausts memory. With virtual threads enabled it's less catastrophic but still unbounded, moving the failure to the connection pool or downstream limits. Always define a named, bounded `ThreadPoolTaskExecutor` (or a virtual-thread executor for I/O-bound work) and reference it by name.
@@ -619,7 +656,7 @@ When schedules are runtime data (user-defined jobs), when you need misfire polic
 
 ---
 
-## 6. Retention check
+## 8. Retention check
 
 1. What exactly happens with `core=4, max=100, queue=10000` under a burst of 1,000 tasks?
 2. Why does a thrown exception permanently kill a `fixedDelay` task, and what's the fix?

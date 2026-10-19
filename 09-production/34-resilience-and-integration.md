@@ -6,7 +6,15 @@
 
 ---
 
-## 1. Timeouts — the one that matters most
+## 1. The idea in one sentence
+
+> **Someone else's outage becomes yours through a held thread — so every pattern here is a way of giving a thread back: a timeout bounds the wait, a circuit breaker skips it entirely, a bulkhead caps how many threads can be spent on one dependency, and idempotency is what makes retrying any of it safe.**
+
+That also sets their order. Timeouts first, because without them nothing else has a bound. Idempotency next, because every other mechanism assumes it. Breakers and bulkheads last, because they decide how much of your capacity a single bad dependency may consume.
+
+---
+
+## 2. Timeouts — the one that matters most
 
 **If you take one thing from this lesson: every network call needs a timeout, and the defaults are effectively infinite.**
 
@@ -72,7 +80,7 @@ Client       → 5s
 
 ---
 
-## 2. Retries
+## 3. Retries
 
 ```xml
 <dependency><groupId>org.springframework.retry</groupId>
@@ -151,7 +159,7 @@ You're holding a pooled connection through the backoff delays (Lesson 23 §6). R
 
 ---
 
-## 3. Circuit breakers
+## 4. Circuit breakers
 
 **Retries help with brief blips. They make sustained failures worse** — you keep hammering a dead service, holding threads, and delaying the error the caller needs to see.
 
@@ -255,7 +263,7 @@ Retry ( CircuitBreaker ( RateLimiter ( TimeLimiter ( Bulkhead ( your call )))))
 
 ---
 
-## 4. Bulkheads and rate limiters
+## 5. Bulkheads and rate limiters
 
 ### Bulkhead — isolate failure domains
 
@@ -301,7 +309,7 @@ Two distinct concerns worth separating:
 
 ---
 
-## 5. Idempotency — the pattern that makes everything else safe
+## 6. Idempotency — the pattern that makes everything else safe
 
 **Every resilience mechanism assumes idempotency.** Retries, at-least-once message delivery, load balancer retries, mobile clients retrying on timeout — all of them can deliver the same operation twice.
 
@@ -408,7 +416,7 @@ public void consume(MonitorEvent event) {
 
 ---
 
-## 6. Graceful degradation and fallbacks
+## 7. Graceful degradation and fallbacks
 
 ```java
 @CircuitBreaker(name = "uptimeService", fallbackMethod = "cachedUptime")
@@ -430,7 +438,7 @@ private Uptime cachedUptime(UUID monitorId, Throwable t) {
 
 ---
 
-## 7. Build this — Vigil's resilience layer
+## 8. Build & break — Vigil's resilience layer
 
 **1. Timeouts everywhere.** Audit every outbound call: `RestClient` connect + read, Hikari `connection-timeout`, `statement_timeout` via `connection-init-sql`, Redis `timeout`. **Write them in a table with a justification for each value** — that document is a great thing to have in the repo.
 
@@ -482,9 +490,39 @@ resilience4j_retry_calls_total{kind="successful_with_retry"}
 ```
 That last one is genuinely useful in production: **a rising "successful with retry" rate means a dependency is degrading before it fails outright** — an early warning signal (Lesson 35).
 
+### Explain out loud (60s)
+
+1. Why an unbounded wait is the root of cascading failure, in terms of threads.
+2. What you retry, what you never retry, and why jitter isn't optional.
+3. Why retry belongs outside the circuit breaker, and what happens if it isn't.
+4. The case a pure error-rate breaker misses, and the setting that catches it.
+5. Why the lost-response case means idempotency is a network property, not a server-side one.
+
 ---
 
-## 8. Interview traps
+## 9. Production rules
+
+| Do / Never | Why |
+|---|---|
+| **Set a timeout on every network call, at every layer** | The defaults are effectively infinite, and an unbounded wait is the single most common cause of cascading production failure |
+| **Only retry transient failures** | Retrying a 400, 401 or 404 triples your load, fixes nothing and buries the real error in the logs |
+| **Always use exponential backoff with jitter** | Without jitter every client that failed together retries together, and the retry storm knocks the recovering service straight back down |
+| **Retry at exactly one layer** | Retries at three layers multiply into dozens of requests against your deepest dependency, precisely when it's already struggling |
+| **Never retry inside a transaction, and keep retry advice outside transaction advice** | Each attempt needs a fresh transaction; retrying inside a doomed one cannot succeed and holds a connection through every backoff |
+| **Honour `Retry-After` on a 429** | The service has told you exactly when to come back; ignoring it is how a throttle becomes a ban |
+| **Order retry outside the circuit breaker** | Then each attempt is evaluated by the breaker and stops instantly once it opens, instead of hammering a known-dead service three times per call |
+| **Set `minimum-number-of-calls` on a breaker** | Otherwise two failures out of two calls reads as a 100% failure rate and the circuit opens on a fluke |
+| **Configure `slow-call-rate-threshold`, not just errors** | A dependency answering in 30 seconds is functionally down while never erroring, and a pure error-rate breaker never notices |
+| **Bulkhead each outbound dependency** | Without one, all 200 request threads can end up blocked on a single slow API, taking down endpoints that never touch it |
+| **Remember Resilience4j's rate limiter is per instance** | Five replicas at one call per second send five per second and still get throttled — a cluster-wide limit needs shared state, as with caching and scheduling |
+| **Accept an `Idempotency-Key` on every POST that matters** | The response can be lost after a successful write, so the client retries an operation that already happened — no server-side correctness prevents that |
+| **Prefer natural idempotency to idempotency keys** | A unique constraint with `ON CONFLICT DO NOTHING` is enforced by the database and cannot be forgotten by a caller |
+| **Write the dedupe record and the business change in one transaction** | Otherwise you process the message, crash before recording it, and process it again — the outbox insight from the consuming side |
+| **Never let a fallback lie** | Returning a plausible default hides the failure and shows green dashboards during an outage; a fallback must be honest about being degraded |
+
+---
+
+## 10. Interview traps
 
 **Q1. What's the most important resilience practice?**
 Timeouts on every network call. Defaults are effectively infinite, so a hung upstream blocks threads indefinitely, exhausting the thread and connection pools until every endpoint — including health checks — fails. Your service goes down because someone else's is slow.
@@ -527,7 +565,7 @@ A dependency that responds successfully but takes 30 seconds. It never errors, s
 
 ---
 
-## 9. Retention check
+## 11. Retention check
 
 1. Trace the full chain from "no read timeout" to "total outage."
 2. Why is jitter not optional, and what's the name of the failure it prevents?

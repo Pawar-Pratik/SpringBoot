@@ -6,7 +6,15 @@
 
 ---
 
-## 1. Monitoring vs observability
+## 1. The idea in one sentence
+
+> **Monitoring answers questions you thought of in advance; observability lets you ask new ones during an incident without deploying code — and the three pillars only work together: the metric alerts you, the trace localizes it, the logs explain it.**
+
+Which is why instrumentation decisions are mostly about where data belongs. Low-cardinality dimensions go in metrics, identifiers go in logs and traces, and a health check should say whether the service is doing its job rather than whether it answers HTTP.
+
+---
+
+## 2. Monitoring vs observability
 
 | | Monitoring | Observability |
 |---|---|---|
@@ -33,7 +41,7 @@ TRACES        one request's path across services — moderate cost
 
 ---
 
-## 2. Actuator
+## 3. Actuator
 
 ```xml
 <dependency><groupId>org.springframework.boot</groupId>
@@ -140,7 +148,7 @@ public class CheckWorkerHealthIndicator implements HealthIndicator {
 
 ---
 
-## 3. Metrics with Micrometer
+## 4. Metrics with Micrometer
 
 **Micrometer is a facade** (SLF4J for metrics): you code against one API and swap Prometheus, Datadog, CloudWatch, or New Relic by changing a dependency.
 
@@ -259,7 +267,7 @@ vigil.dead_letters.total{reason}              counter    — ★ any increase de
 
 ---
 
-## 4. Structured logging
+## 5. Structured logging
 
 ### Why structured
 
@@ -347,7 +355,7 @@ Debug a production problem without a deploy. **Remember it's a *writable* endpoi
 
 ---
 
-## 5. Distributed tracing
+## 6. Distributed tracing
 
 ```xml
 <dependency><groupId>io.micrometer</groupId><artifactId>micrometer-tracing-bridge-otel</artifactId></dependency>
@@ -411,7 +419,7 @@ Metric alert: p99 > 1s
 
 ---
 
-## 6. SLOs and alerting
+## 7. SLOs and alerting
 
 ### Define what "working" means
 
@@ -449,7 +457,7 @@ Error budget:     0.1% → ~43 minutes of failure per month
 
 ---
 
-## 7. The stack
+## 8. The stack
 
 ```
 Vigil (Micrometer + OTel)
@@ -486,7 +494,7 @@ services:
 
 ---
 
-## 8. Build this — make Vigil observable
+## 9. Build & break — make Vigil observable
 
 **1. Actuator with probes** and a separate management port. Hit `/actuator/health/liveness` and `/actuator/health/readiness` and note they return different things.
 
@@ -525,9 +533,41 @@ services:
 
 **14. External monitoring for Vigil itself.** Add a heartbeat: after each successful dispatch cycle, ping an external dead-man's-switch (Healthchecks.io has a free tier). **Then stop Vigil and confirm you get an email.** **You have now solved the "who watches the watcher" problem** — and that's a genuinely memorable thing to describe.
 
+### Explain out loud (60s)
+
+1. Monitoring vs observability, and the metric → trace → logs workflow.
+2. The liveness-probe mistake, told as an incident narrative.
+3. What belongs in a metric tag, what belongs in a log, and the rule that separates them.
+4. Why percentiles can't be averaged, and what you export instead.
+5. What `ERROR` must mean, and the Vigil example that makes the point.
+
 ---
 
-## 9. Interview traps
+## 10. Production rules
+
+| Do / Never | Why |
+|---|---|
+| **Never check a dependency in a liveness probe** | A brief database hiccup then fails liveness on every pod at once, Kubernetes kills them all, and a 30-second blip becomes a restart-loop outage |
+| **Liveness = can this process recover; readiness = can it serve traffic now** | One gets you killed and restarted, the other gets you removed from the load balancer — confusing them is catastrophic in exactly one direction |
+| **Add a `startupProbe`** | Without it `initialDelaySeconds` must cover worst-case startup, which delays detection of genuine hangs for the whole life of the pod |
+| **Report a degraded cache as DEGRADED, not DOWN** | You want to keep serving without Redis, not be pulled out of the load balancer for a performance dependency |
+| **Make health checks reflect whether the service is doing its job** | An API can answer every request while the check engine is silently dead, and an HTTP-only health check reports that as green |
+| **Never put an unbounded value in a metric tag** | User IDs, URLs and request IDs explode cardinality and cost real money; if you can't enumerate the values, it isn't a tag |
+| **Put high-cardinality data in logs and traces** | That is precisely what they're for — `monitorId` belongs in a structured log field you can query, not in a metric label |
+| **Export histogram buckets, not just client-side percentiles** | Percentiles can't be averaged across instances, so a fleet-wide p99 is only correct if the backend aggregates buckets |
+| **Alert on p99, never on an average** | 99 requests at 10ms and one at 10s averages to 110ms — invisible, and that one request is a customer having an awful time |
+| **Log structured, with a correlation ID in MDC** | It turns interleaved lines from concurrent requests into a reconstructible narrative, and it makes "p95 for HTTP monitors in org X" a query rather than a grep |
+| **Propagate MDC across `@Async` with a `TaskDecorator`** | It is `ThreadLocal`-backed, so background work loses the correlation ID exactly where you most want it |
+| **Reserve `ERROR` for "a human must act"** | Logging ERROR for normal conditions — a monitor being down, in a monitoring product — trains operators to ignore errors |
+| **Never log credentials, tokens or full request bodies** | Logs usually have wider access than the database, so a leak there can be worse than a database exposure |
+| **Use `@Observed` rather than hand-rolling an aspect** | One annotation yields a timer, a trace span and log correlation from a single instrumentation point |
+| **Prefer tail-based sampling** | Head-based sampling throws away the slow and failed traces, which are the only ones you ever actually want |
+| **Alert on symptoms, with multi-window burn rates** | Causes belong on dashboards; an alert nobody acts on is alert fatigue, and fatigue is how the real page gets missed |
+| **Monitor the monitor from outside itself** | Vigil cannot be what watches Vigil — a dead-man's-switch heartbeat is the only thing that fires when the whole system stops |
+
+---
+
+## 11. Interview traps
 
 **Q1. Monitoring vs observability?**
 Monitoring answers predefined questions about known failure modes. Observability means having enough high-cardinality data to ask *new* questions during an incident without deploying code. The three pillars work together: metrics tell you something is wrong, traces tell you where, logs tell you what.
@@ -573,7 +613,7 @@ Externally. Vigil cannot be the thing that watches Vigil — a shared failure ta
 
 ---
 
-## 10. Retention check
+## 12. Retention check
 
 1. Explain the liveness-checks-the-database failure, step by step, to its conclusion.
 2. Why can't you average p99 across instances, and what's the fix?

@@ -6,7 +6,15 @@
 
 ---
 
-## 1. The method — this matters more than any tuning flag
+## 1. The idea in one sentence
+
+> **High latency with low CPU means you are waiting, not computing — and since the two most common causes of slowness both look exactly like that, no JVM flag will help until you've measured where the waiting happens.**
+
+That is the whole method in one line: measure, localize, fix, re-measure. The tuning knowledge in this lesson is only useful after localization, and most of it turns out to be about memory limits in containers rather than about the garbage collector.
+
+---
+
+## 2. The method — this matters more than any tuning flag
 
 ```
 1. DEFINE      What is "slow"? Which endpoint, which percentile, what target?
@@ -39,7 +47,7 @@ In my experience of Spring applications, "slow" resolves to these in roughly thi
 
 ---
 
-## 2. Localizing the problem
+## 3. Localizing the problem
 
 ### Step 1 — the observability stack (Lesson 35)
 
@@ -103,7 +111,7 @@ Then `EXPLAIN (ANALYZE, BUFFERS)` on the offenders (Lesson 24).
 
 ---
 
-## 3. Memory and garbage collection
+## 4. Memory and garbage collection
 
 ### The heap layout
 
@@ -191,7 +199,7 @@ Then open in **Eclipse MAT** and run "Leak Suspects." MAT's **dominator tree** i
 
 ---
 
-## 4. Startup time
+## 5. Startup time
 
 Startup matters for autoscaling responsiveness, serverless cold starts, and rolling-deploy speed. A typical Spring Boot app starts in **2–6 seconds**.
 
@@ -249,7 +257,7 @@ java -XX:SharedArchiveFile=app.jsa -jar vigil.jar
 
 ---
 
-## 5. Application-level performance
+## 6. Application-level performance
 
 ### Database (usually the whole answer)
 
@@ -311,7 +319,7 @@ var results = futures.stream().map(CompletableFuture::join).toList();
 
 ---
 
-## 6. Load testing
+## 7. Load testing
 
 **You cannot claim a performance improvement without a load test.** And a load test you ran once is worth more in an interview than any amount of theory.
 
@@ -364,7 +372,7 @@ If your measured throughput doesn't match that, one of your numbers is wrong. **
 
 ---
 
-## 7. Build this — measure and improve Vigil
+## 8. Build & break — measure and improve Vigil
 
 **1. Establish a baseline.** Seed realistic data: 5,000 monitors, **2,000,000 check results** (use `JdbcClient.batchUpdate` with `reWriteBatchedInserts=true` — Lesson 19). Then k6-test your three main endpoints and **record p50/p95/p99 and throughput in a table.** That table is your reference for everything below.
 
@@ -420,9 +428,39 @@ Expect a long build and some reflection hints to add. Then compare: startup time
 
 **12. Guard against regression.** Add a k6 threshold check to CI (against a seeded test environment) so a performance regression fails the build the way a broken test does. **Very few projects do this**, and it's the "GUARD" step of the method actually implemented.
 
+### Explain out loud (60s)
+
+1. The method, in four words, and why the order matters.
+2. What high latency with low CPU tells you, and what it rules out.
+3. The three-thread-dump technique, and what it distinguishes.
+4. Why `-Xmx` equal to the container limit guarantees an OOMKill, and what that failure looks like.
+5. Why swapping garbage collectors is usually the wrong fix.
+
 ---
 
-## 8. Interview traps
+## 9. Production rules
+
+| Do / Never | Why |
+|---|---|
+| **Never change anything without a measurement, and never accept a fix without a re-measurement** | Most "performance work" is people changing what they believe is slow; the sin isn't optimizing, it's optimizing without evidence |
+| **Read the CPU first: high latency plus low CPU means I/O, not computation** | It immediately rules out GC tuning, algorithmic work and thread-pool sizing, which is most of what people try first |
+| **Start from the trace when you have one** | It is the cheapest possible localization, and it tells you which span to profile instead of profiling everything |
+| **Take three thread dumps ten seconds apart** | Threads present in all three are genuinely stuck; threads that move are just working — that comparison is what distinguishes a hang from load |
+| **Profile with wall-clock, not just CPU, for latency problems** | CPU profiling an I/O-bound service shows you almost nothing, because the time is spent blocked rather than burning cycles |
+| **Read flame graphs horizontally** | Width is time; a wide plateau is your hot spot, and a deep narrow stack is usually irrelevant |
+| **Sort `pg_stat_statements` by `total_exec_time`, not mean** | A 5ms query run 100,000 times costs far more than one 2-second query, and sorting by mean hides exactly the N+1 signature |
+| **Never set `-Xmx` equal to the container limit** | Metaspace, code cache, thread stacks and direct buffers live outside the heap — reserve 25–30% or the kernel kills you |
+| **Use `-XX:MaxRAMPercentage` instead of a hardcoded `-Xmx`** | It reads the cgroup limit, so changing the pod's memory no longer silently leaves a latent OOMKill behind |
+| **Recognize exit code 137 as an OOMKill, not a Java `OutOfMemoryError`** | There is no stack trace, no heap dump and nothing in your logs — the silence is what makes it confusing |
+| **Leave G1 alone** | Most "GC problems" are allocation problems, and swapping collectors treats the symptom while the code keeps creating the garbage |
+| **Set `HeapDumpOnOutOfMemoryError` and `ExitOnOutOfMemoryError`** | After an OOM some threads died mid-operation, so dying cleanly for the orchestrator beats serving corrupted responses |
+| **Treat a heap dump as a production secret** | It contains every password, token and PII value that was in memory at the moment it was taken |
+| **Trim dependencies before reaching for AOT or native images** | Fewer auto-configurations is free and reversible; a native image costs you reflection configuration and long builds |
+| **Put a load-test threshold in CI** | It makes a performance regression fail the build the way a broken test does, which is the one step of the method people skip |
+
+---
+
+## 10. Interview traps
 
 **Q1. "The app is slow." How do you approach it?**
 Define what slow means (endpoint, percentile, target), reproduce and measure, localize the layer with tracing/thread dumps/profiling, fix one thing, re-measure, then add a guard so it can't regress. Never change anything without a measurement, and never accept a fix without a re-measurement.
@@ -465,7 +503,7 @@ It's usually misquoted. Knuth's point was that you should optimize the critical 
 
 ---
 
-## 9. Retention check
+## 11. Retention check
 
 1. Give the six-step performance method, and the two rules that bracket it.
 2. High latency, 12% CPU. What are your first three hypotheses, and what do you run?

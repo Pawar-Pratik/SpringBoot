@@ -6,7 +6,15 @@
 
 ---
 
-## 1. Before you cache: measure
+## 1. The idea in one sentence
+
+> **A cache is a performance optimization and must never be load-bearing for correctness — the moment your application is wrong or unavailable because the cache is empty, stale or down, you haven't built a cache, you've built an undocumented database with no durability.**
+
+Everything here tests that principle. Key design decides whether stale means "slow" or "another tenant's data". Stampede handling decides whether a cache miss is a blip or an outage. Redis being down should cost you latency, not availability.
+
+---
+
+## 2. Before you cache: measure
 
 **The single most common caching mistake is caching instead of fixing.**
 
@@ -34,7 +42,7 @@ You've hidden a 2-second query behind a cache. Now: the first request after ever
 
 ---
 
-## 2. The Spring Cache abstraction
+## 3. The Spring Cache abstraction
 
 ```java
 @Configuration
@@ -135,7 +143,7 @@ KeyGenerator tenantAwareKeyGenerator() {
 
 ---
 
-## 3. Cache providers
+## 4. Cache providers
 
 | Provider | Scope | Use |
 |---|---|---|
@@ -251,7 +259,7 @@ record MonitorSummary(UUID id, String name, MonitorStatus status, BigDecimal upt
 
 ---
 
-## 4. Invalidation — the actual hard problem
+## 5. Invalidation — the actual hard problem
 
 > *"There are only two hard things in computer science: cache invalidation and naming things."* — Phil Karlton
 
@@ -312,7 +320,7 @@ More code, but **full control** — you can implement stampede protection, proba
 
 ---
 
-## 5. The stampede (thundering herd)
+## 6. The stampede (thundering herd)
 
 ```
 A popular status page is cached with a 30s TTL. It expires.
@@ -393,7 +401,7 @@ Duration ttl = Duration.ofMinutes(10).plusSeconds(ThreadLocalRandom.current().ne
 
 ---
 
-## 6. When Redis is down
+## 7. When Redis is down
 
 **Your cache must be a performance optimization, never a dependency.**
 
@@ -442,7 +450,7 @@ public class RedisCacheHealthIndicator implements HealthIndicator {
 
 ---
 
-## 7. HTTP caching — the cache you didn't have to build
+## 8. HTTP caching — the cache you didn't have to build
 
 Before caching server-side, ask whether the client can cache (Lesson 15 §5):
 
@@ -459,7 +467,7 @@ return ResponseEntity.ok()
 
 ---
 
-## 8. Build this — Vigil's caching
+## 9. Build & break — Vigil's caching
 
 **1. Redis via Docker + Testcontainers:**
 ```bash
@@ -511,9 +519,40 @@ docker stop vigil-redis
 
 **13. HTTP caching + ETag** on the status page (Lesson 15). Verify a 304 with `If-None-Match` and **confirm the expensive render doesn't run** on the 304 path.
 
+### Explain out loud (60s)
+
+1. The three questions you ask before adding `@Cacheable`.
+2. The most dangerous caching bug, and why it only shows up under concurrency.
+3. Local vs distributed cache, in terms of what a user actually experiences.
+4. The evict-before-commit race, start to finish.
+5. What happens to your application when Redis dies, and what you configured to make that true.
+
 ---
 
-## 9. Interview traps
+## 10. Production rules
+
+| Do / Never | Why |
+|---|---|
+| **Profile before you cache** | Caching a slow query hides the bug and converts it into a latency spike at every expiry — fix the query, index or N+1 first |
+| **Put everything the result depends on into the key** | Tenant, user, locale and feature flag included — a missing dimension is a cross-tenant data leak, not a performance issue, and it only appears under concurrency |
+| **Never use a mutable object as a cache key** | Its `hashCode` changes, so the entry becomes unreachable and you silently lose every hit |
+| **Never self-invoke a `@Cacheable` method** | It's proxy-based like everything else, so you get zero hits, no error and a long search for the reason |
+| **Never run `ConcurrentMapCacheManager` in production** | It has no eviction and no TTL, which makes it an unbounded memory leak wearing a cache's name |
+| **Use a distributed cache for a multi-instance service** | With a local cache and N instances an eviction reaches 1/N of traffic, so users see fresh and stale data apparently at random |
+| **Configure JSON serialization, not the JDK default** | JDK bytes are unreadable in `redis-cli`, break on class changes and tie your cache to Java |
+| **Version the cache key prefix (`vigil:v1:`)** | Bumping it makes every old entry unreachable instantly — a zero-downtime flush that doesn't disturb anything else sharing that Redis |
+| **Set per-cache TTLs, not one global value** | Plan limits change daily and status pages every 30 seconds; a single TTL gives you either stale data or a useless hit rate |
+| **Always set a Redis command timeout** | Without one a Redis hiccup blocks request threads indefinitely, so the cache you added for speed takes the application down |
+| **Degrade to the database when the cache is unavailable, and report degraded, not DOWN** | You want to keep serving without a cache rather than be removed from the load balancer |
+| **Know that `@CacheEvict` runs before the commit** | A concurrent read in that window repopulates the cache with the old value, which then persists for the whole TTL — `transactionAware()` or `AFTER_COMMIT` closes it |
+| **Protect expensive entries against stampede** | `sync = true` covers one JVM, a distributed lock covers the cluster, and stale-while-revalidate means nobody waits at all |
+| **Jitter TTLs on anything bulk-populated** | Otherwise every key expires in the same second and you've built yourself a periodic load spike |
+| **Cache negative results briefly** | Repeated lookups of keys that don't exist never populate anything, so every one reaches the database — and that's weaponizable |
+| **Use ETags and a CDN before reaching for Redis on public content** | A 304 is zero bytes and zero work, and the cheapest cache is the one you don't operate |
+
+---
+
+## 11. Interview traps
 
 **Q1. When should you NOT cache?**
 When staleness is unacceptable (permissions, balances, anything security-relevant); when the data is write-heavy (constant invalidation, poor hit rate); and — most importantly — **before you've measured**, because caching a slow query hides the real bug and converts steady latency into spikes at expiry plus stampede risk. Fix the index or the N+1 first.
@@ -553,7 +592,7 @@ The one you don't run: HTTP caching (`Cache-Control` + ETag → 304 with no body
 
 ---
 
-## 10. Retention check
+## 12. Retention check
 
 1. Give the three questions to ask before adding `@Cacheable`.
 2. Explain the multi-tenant cache key bug and why it's a breach rather than a bug.
