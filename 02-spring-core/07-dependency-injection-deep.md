@@ -6,7 +6,15 @@
 
 ---
 
-## 1. The three injection styles
+## 1. The idea in one sentence
+
+> **Spring resolves dependencies by *type* and uses everything else — `@Primary`, `@Qualifier`, bean names, generics — only to break ties; and constructor injection is the right default because it is the only style in which a wrongly-wired object cannot be constructed at all.**
+
+Those two halves answer most of what you'll be asked here. Ambiguity errors are the tie-breaker chain running out of options, and circular-dependency errors are the compiler-like guarantee of constructor injection doing its job at startup.
+
+---
+
+## 2. The three injection styles
 
 ### Constructor injection — the correct default
 
@@ -72,7 +80,7 @@ Legitimate but rare. The common modern alternative is `ObjectProvider<T>` (§5).
 
 ---
 
-## 2. Why constructor injection wins — the four independent reasons
+## 3. Why constructor injection wins — the four independent reasons
 
 Most candidates give one reason. Give all four and you've visibly out-answered the room.
 
@@ -145,7 +153,7 @@ Constructor injection is verbose without Lombok, and it makes cycles hard — wh
 
 ---
 
-## 3. How Spring resolves *which* bean to inject
+## 4. How Spring resolves *which* bean to inject
 
 The algorithm, in order:
 
@@ -223,7 +231,7 @@ Do this in real projects. It's a small thing that marks a codebase as thoughtful
 
 ---
 
-## 4. Injecting collections — the strategy pattern, for free
+## 5. Injecting collections — the strategy pattern, for free
 
 This is one of Spring's most elegant features and it's *underused*:
 
@@ -300,7 +308,7 @@ public Dispatcher(ObjectProvider<NotificationChannel> provider) { ... }
 
 ---
 
-## 5. Optional and lazy dependencies
+## 6. Optional and lazy dependencies
 
 ```java
 // 1. Optional<T> — clean, explicit
@@ -332,7 +340,7 @@ That last point is why libraries use it: it avoids forcing bean creation order a
 
 ---
 
-## 6. Circular dependencies
+## 7. Circular dependencies
 
 ```java
 @Service
@@ -407,7 +415,7 @@ MonitorService(@Lazy IncidentService incidents) { ... }
 
 ---
 
-## 7. Where `@Autowired` still appears
+## 8. Where `@Autowired` still appears
 
 Constructor injection removes most `@Autowired`, but you'll see it here:
 
@@ -440,7 +448,7 @@ Spring supports both. `@Inject` has no `required=false` equivalent. Use Spring's
 
 ---
 
-## 8. Generics-aware injection (a nice detail to know)
+## 9. Generics-aware injection (a nice detail to know)
 
 Spring resolves generic types, which enables a clean pattern:
 
@@ -463,7 +471,7 @@ Two beans implement `CheckHandler`, but there's no ambiguity because the generic
 
 ---
 
-## 9. Build this
+## 10. Build & break
 
 Work in `com.vigil.playground.di2`. **These are the exact scenarios you'll be asked about.**
 
@@ -493,9 +501,36 @@ Then try `spring.main.allow-circular-references=true` and note that the app star
 
 **5. Field-injection failure mode.** Write a service with `@Autowired` fields. Then write a test that does `new TheService()` and calls a method. Watch the NPE. Now convert to constructor injection and note that the equivalent mistake **won't compile**.
 
+### Explain out loud (60s)
+
+1. All four reasons for constructor injection, without repeating yourself.
+2. The resolution algorithm when two beans of one type exist, in order.
+3. Why `@InjectMocks` can leave a dependency null, and why a constructor can't.
+4. The collection-injection strategy pattern, and what it buys you in maintenance.
+5. Why Boot 2.6 banned circular references — mention proxies.
+
 ---
 
-## 10. Interview traps
+## 11. Production rules
+
+| Do / Never | Why |
+|---|---|
+| **Constructor injection for every business bean; never field injection in a service** | Only constructors give you `final` fields, and `final` is what safely publishes a singleton's dependencies to all 200 request threads |
+| **Don't add `@Autowired` to a single constructor** | Spring has inferred it since 4.3, so it is noise that implies the annotation is doing something |
+| **Never rely on parameter-name matching to select a bean** | It is real (step 3 of resolution) and it is fragile: a rename silently rewires, and names only survive compilation with `-parameters` |
+| **Prefer a custom qualifier annotation (`@Slack`) over `@Qualifier("slack")`** | A string typo compiles and fails at startup; an annotation is compiler-checked and survives refactoring |
+| **`@Primary` on the bean for the obvious default, `@Qualifier` at the injection point for the exception** | They are asymmetric on purpose — one declares a default, the other overrides it, and the injection point always wins |
+| **Inject `List<T>` for strategy and plugin sets** | Adding an implementation then requires no change to the consumer — Open/Closed satisfied by wiring rather than by an `if/else` chain |
+| **Declare `@Order` whenever an injected list is a pipeline** | Without it the order follows scan order, so an unrelated refactor can silently reorder your validators |
+| **Never set `spring.main.allow-circular-references=true`** | It restores a mechanism that could inject a *pre-proxy* reference, silently disabling `@Transactional` on the injected bean |
+| **Fix a cycle by extracting a third bean or publishing an event, not with `@Lazy`** | A cycle nearly always means a hidden third concept; `@Lazy` keeps the design and costs you fail-fast startup validation |
+| **Use `ObjectProvider<T>` for optional dependencies, not `@Autowired(required = false)`** | It gives you `getIfAvailable`, `getIfUnique` and deferred lookup instead of a field that might be null |
+| **Construct the service explicitly in tests; avoid `@InjectMocks`** | A dependency you forgot to mock is left null and NPEs at runtime — with a constructor, the same mistake fails to compile |
+| **With `@RequiredArgsConstructor`, never leave two same-typed `final` fields adjacent and unqualified** | Parameters are generated in field-declaration order, so reordering fields silently swaps the injected values |
+
+---
+
+## 12. Interview traps
 
 **Q1. Constructor vs field injection — why constructor?**
 Four independent reasons: (1) `final` fields → immutability and safe cross-thread publication; (2) the object can never exist in a partially initialized state; (3) testable with plain `new`, no reflection or Mockito needed, and adding a dependency breaks test *compilation* rather than NPE-ing at runtime; (4) an over-long parameter list is a visible design signal that field injection hides. Bonus: cycles fail at startup instead of silently working.
@@ -532,7 +567,7 @@ Yes — parameter/field name matching a bean name is step 3 of resolution, and `
 
 ---
 
-## 11. Retention check
+## 13. Retention check
 
 1. Give all four reasons for constructor injection, without repeating yourself.
 2. Walk the resolution algorithm for two candidate beans of the same type.

@@ -6,7 +6,15 @@
 
 ---
 
-## Part 1 — Scopes
+## Part 1 — The idea in one sentence
+
+> **Three questions decide a bean's existence — *how many* (scope), *when* (lifecycle), and *whether at all* (conditions) — and nearly every bug in this area is a bean answering one of them on a different thread, or in a different phase, than you assumed.**
+
+The prototype-in-a-singleton trap, the `@PostConstruct` proxy trap, and request scope dying inside `@Async` are the same mistake three times: code that assumes a bean's scope or phase matches the caller's.
+
+---
+
+## Part 2 — Scopes
 
 ### The six scopes
 
@@ -172,7 +180,7 @@ Implement `org.springframework.beans.factory.config.Scope` and register it. Real
 
 ---
 
-## Part 2 — Lifecycle
+## Part 3 — Lifecycle
 
 ### The full ordering, one bean at a time
 
@@ -305,7 +313,7 @@ class ReadyLogger {
 
 ---
 
-## Part 3 — Conditional beans
+## Part 4 — Conditional beans
 
 **This is the mechanism auto-configuration is built from.** Learn it here and Lesson 11 will feel like a formality.
 
@@ -428,7 +436,7 @@ NotificationChannel noopChannel() { return n -> {}; }
 
 ---
 
-## Part 4 — Build this
+## Part 5 — Build & break
 
 Work in `com.vigil.playground.lifecycle`.
 
@@ -502,9 +510,36 @@ Start without the property → check `/actuator/beans` (absent) and `/actuator/c
 
 **6. Graceful shutdown.** Add `server.shutdown=graceful`, write an endpoint that `Thread.sleep(10_000)` then returns. Call it, and while it's running, stop the app. Observe that the request **completes** before the JVM exits. Now set `server.shutdown=immediate` and repeat. **That difference is what zero-downtime deployment is made of.**
 
+### Explain out loud (60s)
+
+1. Spring singleton vs the Singleton design pattern — the precise difference.
+2. What happens when a prototype is injected into a singleton, and three ways to get a fresh one.
+3. The scoped proxy: what it does on every method call, and where it finds the instance.
+4. Three Spring features that break across `@Async` for the same underlying reason — and the reason.
+5. How `@ConditionalOnMissingBean` produces "opinionated defaults you can override."
+
 ---
 
-## Part 5 — Interview traps
+## Part 6 — Production rules
+
+| Do / Never | Why |
+|---|---|
+| **Singleton beans hold no mutable instance state** | One instance serves every request thread, so a field is shared state — the resulting corruption only appears under production load |
+| **Never inject a prototype into a singleton and expect a fresh instance** | The singleton is constructed once, so the injection happens once; use `ObjectProvider.getObject()`, `@Lookup` — or just `new` |
+| **Never expect Spring to destroy a prototype** | It hands the object over and forgets it, so `@PreDestroy` never runs; whatever holds a resource must be closed by the caller |
+| **Use `@RequestScope`, never a bare `@Scope("request")`** | The shorthand implies the scoped proxy; without it, injection into a singleton fails with "Scope 'request' is not active for the current thread" |
+| **Never read request scope, `SecurityContextHolder` or MDC from an `@Async` or `@Scheduled` thread** | All three are `ThreadLocal`-backed, so they are simply absent on another thread — propagate explicitly with a `TaskDecorator` or pass the value |
+| **Initialize in the constructor; use `@PostConstruct` only for work that needs the injected object** | The constructor gives you validated, `final` dependencies and runs before anything else can see a half-built bean |
+| **Never put `@Transactional`, `@Async` or `@Cacheable` work in `@PostConstruct`** | Proxies are applied after initialization, so `this` is the raw target — use `ApplicationReadyEvent` and call a *different* bean |
+| **Never rely on `@PreDestroy` for data integrity** | `kill -9`, an OOM kill or a crashed container skips it entirely; anything you can't lose must be durable before shutdown begins |
+| **Set `server.shutdown=graceful` and a shutdown timeout in every real service** | It lets in-flight requests finish on SIGTERM instead of being severed, which is half of what makes a rolling deploy zero-downtime |
+| **Use `@ConditionalOnMissingBean` only inside auto-configuration** | It depends on auto-config being evaluated last; between your own `@Configuration` classes there is no ordering guarantee, so the outcome is non-deterministic |
+| **Prefer `@ConditionalOnProperty` over `@Profile` for features** | Profiles scattered through business logic mean the production path is the one you never exercise; properties keep one code path with different values |
+| **Never enable `spring.main.lazy-initialization` in production** | It moves wiring errors from startup to the first request that touches them, and makes that request pay the initialization latency |
+
+---
+
+## Part 7 — Interview traps
 
 **Q1. Default bean scope, and what "singleton" means precisely?**
 `singleton` — one instance **per ApplicationContext**, not per JVM (and not the GoF Singleton pattern). Multiple contexts (common in tests) mean multiple instances.
@@ -550,7 +585,7 @@ Wiring errors move from startup to first request, the first request pays initial
 
 ---
 
-## Part 6 — Retention check
+## Part 8 — Retention check
 
 1. What's the difference between a Spring singleton and the Singleton design pattern?
 2. Draw the request-scoped-bean-in-a-singleton diagram and explain what the proxy does per call.

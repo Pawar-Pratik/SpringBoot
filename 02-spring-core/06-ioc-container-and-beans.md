@@ -6,7 +6,15 @@
 
 ---
 
-## 1. What a bean actually is
+## 1. The idea in one sentence
+
+> **The container works in two separate phases — it collects bean *definitions* (recipes) first, then instantiates *instances* (cakes) from them — and almost every surprising Spring behaviour is answered by asking which of the two phases you are standing in.**
+
+`@ConditionalOnMissingBean`, bean overriding, `BeanFactoryPostProcessor` vs `BeanPostProcessor`, and why `@Transactional` is dead inside `@PostConstruct` are all the same question: definitions or instances?
+
+---
+
+## 2. What a bean actually is
 
 > **A bean is an object whose lifecycle is managed by the Spring container.**
 
@@ -23,7 +31,7 @@ What "managed" buys you:
 
 ---
 
-## 2. Bean definitions vs bean instances — the distinction most people miss
+## 3. Bean definitions vs bean instances — the distinction most people miss
 
 This is the key insight of the lesson.
 
@@ -59,7 +67,7 @@ Spring's startup has **two distinct phases**, and knowing they're separate expla
 
 ---
 
-## 3. The container types: `BeanFactory` vs `ApplicationContext`
+## 4. The container types: `BeanFactory` vs `ApplicationContext`
 
 ```
 BeanFactory                         ← the bare container: getBean(), lazy instantiation
@@ -105,7 +113,7 @@ Needing `ApplicationContext` in business code is usually a smell — it means yo
 
 ---
 
-## 4. The five ways to create a bean
+## 5. The five ways to create a bean
 
 ### Way 1 — `@Component` and its stereotypes (your default)
 
@@ -268,7 +276,7 @@ Used by library authors and for plugin architectures. You'll rarely write it; re
 
 ---
 
-## 5. The full startup sequence (the answer that impresses)
+## 6. The full startup sequence (the answer that impresses)
 
 Practise narrating this. It's the single highest-value answer in Spring interviews.
 
@@ -337,7 +345,7 @@ Practise narrating this. It's the single highest-value answer in Spring intervie
 
 ---
 
-## 6. Bean naming, overriding, and the errors you'll actually see
+## 7. Bean naming, overriding, and the errors you'll actually see
 
 **Default names:** the class name with a lowercased first letter (`MonitorService` → `monitorService`), or the method name for `@Bean`. Special case: if the first *two* letters are both uppercase, the name is unchanged (`URLShortener` → `URLShortener`) — an obscure rule that occasionally explains a mystery.
 
@@ -393,7 +401,7 @@ Arrays.stream(ctx.getBeanDefinitionNames()).sorted().forEach(System.out::println
 
 ---
 
-## 7. Build this
+## 8. Build & break
 
 Work in your `vigil` project under `com.vigil.playground.container`.
 
@@ -438,9 +446,34 @@ Now change to `@Configuration(proxyBeanMethods = false)` and re-run. **It prints
 
 **5. Explore Actuator.** Hit `/actuator/beans` and search for `monitorService`. Note the `dependencies` array — that's your object graph, rendered.
 
+### Explain out loud (60s)
+
+1. Definition vs instance, and two behaviours that only make sense once you know they're separate phases.
+2. What `proxyBeanMethods = false` changes, and the production symptom of getting it wrong.
+3. Which stereotype annotations add real behaviour beyond `@Component`, and what each adds.
+4. Why auto-configuration is evaluated last, and which annotation depends on that ordering.
+5. Why `@Transactional` does nothing inside `@PostConstruct`.
+
 ---
 
-## 8. Interview traps
+## 9. Production rules
+
+| Do / Never | Why |
+|---|---|
+| **Keep `@SpringBootApplication` in the root package** | Component scan covers that package and everything below it and nothing else — a class one package sideways is invisible, and that is a top-three "why isn't my bean found?" |
+| **Prefer `basePackageClasses = Marker.class` over `basePackages = "com.x"`** | A package rename refactors the class reference and silently breaks the string |
+| **Take `@Bean` dependencies as method parameters; never call one `@Bean` method from another** | Parameters work in both full and lite mode, so you can set `proxyBeanMethods = false` safely and never risk a second connection pool |
+| **Never set `spring.main.allow-bean-definition-overriding=true`** | The default exists because silent overriding made behaviour depend on scan order and produced bugs nobody could trace |
+| **Never do work needing `@Transactional` or `@Async` in `@PostConstruct`** | Proxies are applied *after* initialization callbacks, so `this` is still the raw target — use `ApplicationReadyEvent` instead |
+| **Don't inject `ApplicationContext` into business code** | Looking beans up by name is service-locator, which reintroduces exactly the coupling DI removed; it is legitimate only in framework code and tests |
+| **`@Bean` for classes you don't own, `@Component` for classes you do** | You can't annotate a third-party class, and you shouldn't hand-declare one you could simply scan |
+| **Put `@Repository` on data-access classes, not `@Component`** | It isn't decoration — it installs the proxy that translates vendor `SQLException`s into Spring's portable `DataAccessException` hierarchy |
+| **Leave singletons eager; don't turn on global lazy initialization** | Eager creation is what makes a missing bean or bad URL fail at startup instead of at 2am on the first request that reaches it |
+| **Read `/actuator/beans` and `/actuator/conditions` before adding annotations** | They answer "does this bean exist, what got injected, and which auto-config didn't match and why" — guessing answers none of those |
+
+---
+
+## 10. Interview traps
 
 **Q1. What is a Spring bean?**
 An object whose lifecycle the container manages: created, injected, possibly proxied, lifecycle-callbacked, and destroyed by Spring. Not a special type — no interface, no base class, no JavaBean conventions required.
@@ -477,7 +510,7 @@ Give the sequence from §5, and make sure you hit: application-type deduction fr
 
 ---
 
-## 9. Retention check
+## 11. Retention check
 
 1. What's the difference between a bean definition and a bean instance, and name two behaviours that only make sense once you know they're separate phases?
 2. You add `@Configuration(proxyBeanMethods = false)` to a class where one `@Bean` method calls another. What breaks, and how would you notice in production?

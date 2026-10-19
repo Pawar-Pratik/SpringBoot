@@ -6,7 +6,15 @@
 
 ---
 
-## 1. The problem AOP solves
+## 1. The idea in one sentence
+
+> **A proxy is a wrapper, and a wrapper can only intercept calls that pass through it — so every Spring AOP rule, limitation and silent failure follows from asking one question: did this call arrive from outside the object, or from inside it?**
+
+Spring chose runtime proxies over AspectJ's compiler so that no special build step is needed. That one pragmatic decision produces every constraint in this lesson: method-execution join points only, no `final`/`private`/`static` advice, and self-invocation.
+
+---
+
+## 2. The problem AOP solves
 
 Lesson 05 showed you this:
 
@@ -41,7 +49,7 @@ Logging, security, transactions and metrics are **cross-cutting concerns**: they
 
 ---
 
-## 2. The vocabulary (interviewers use these exact words)
+## 3. The vocabulary (interviewers use these exact words)
 
 | Term | Definition | Concrete example |
 |---|---|---|
@@ -98,7 +106,7 @@ Which means **`@Transactional`, `@Cacheable`, `@Retryable`, `@Async` and `@TimeL
 
 ---
 
-## 3. How proxies are actually created
+## 4. How proxies are actually created
 
 Recall Lesson 06 step 10f: proxies are created by a `BeanPostProcessor` after initialization. Specifically, `AnnotationAwareAspectJAutoProxyCreator`:
 
@@ -186,7 +194,7 @@ public class Svc {
 
 ---
 
-## 4. THE SELF-INVOCATION PROBLEM — definitive treatment
+## 5. THE SELF-INVOCATION PROBLEM — definitive treatment
 
 You met it in Lesson 04. Here it is in full, because it is *the* Spring AOP interview question and *the* Spring AOP production bug.
 
@@ -327,7 +335,7 @@ You'll get lines like `Getting transaction for [com.vigil.CheckService.runCheck]
 
 ---
 
-## 5. The same mechanism elsewhere: Hibernate lazy loading
+## 6. The same mechanism elsewhere: Hibernate lazy loading
 
 ```java
 Monitor m = repo.findById(id).orElseThrow();
@@ -345,7 +353,7 @@ Once you see proxies as a general technique rather than a Spring feature, `LazyI
 
 ---
 
-## 6. Build this
+## 7. Build & break
 
 Work in `com.vigil.playground.aop`. **Exercise 3 is the one that matters most.**
 
@@ -420,9 +428,32 @@ logging.level.org.springframework.transaction.interceptor=TRACE
 ```
 Re-run exercise 3. You'll see `Getting transaction for [...inner]` **only** in the direct-call case. That log line's presence or absence is your diagnostic tool forever.
 
+### Explain out loud (60s)
+
+1. Why Spring chose proxies over AspectJ weaving, and the limitation that choice created.
+2. The self-invocation trace: which object holds which reference at each hop.
+3. The three silent killers (`private`, `final`, `static`) and why the *class* being `final` fails loudly instead.
+4. JDK proxy vs CGLIB, and the error Boot's default exists to prevent.
+5. Why `@Transactional`, `@Cacheable` and `@Retryable` must all be `@Around` advice.
+
 ---
 
-## 7. Interview traps
+## 8. Production rules
+
+| Do / Never | Why |
+|---|---|
+| **Never annotate a `private`, `final` or `static` method with `@Transactional`, `@Cacheable`, `@Async` or `@PreAuthorize`** | CGLIB advises by overriding; none of the three can be overridden, so the annotation is inert with no error, no warning and no log line |
+| **Never call an advised method through `this.`** | Execution is already inside the target, so the proxy is out of the picture — on `@PreAuthorize` this turns a silent bug into an authorization bypass |
+| **Fix self-invocation by extracting the advised method into its own bean** | The injected reference is the proxy, so the call goes through it again — and the extraction usually improves the design on its own |
+| **Treat a bean as proxied only after you've seen `$$SpringCGLIB` or `$Proxy` in its class name** | Proxying is per-bean and only happens if a pointcut matched; everything else you debug before checking this is wasted effort |
+| **Leave `proxyTargetClass=true` (Boot's default) alone** | A JDK proxy implements only your interfaces, so injecting the concrete class fails with `BeanNotOfRequiredTypeException` and methods off the interface vanish |
+| **Expect `@Around` whenever an annotation changes control flow** | `@Transactional`, `@Cacheable`, `@Retryable` and `@Async` all need the ability to skip, repeat or wrap `proceed()` — knowing that explains all four at once |
+| **Remember a join point in Spring AOP is always a method execution** | Field reads and constructor calls can't be intercepted by a wrapper, so anything needing those requires real AspectJ weaving |
+| **Don't put proxied behaviour inside `@PostConstruct`** | Proxies are created after initialization, so advice on anything you call on `this` there simply isn't attached yet |
+
+---
+
+## 9. Interview traps
 
 **Q1. What is AOP and what problem does it solve?**
 A way to modularize cross-cutting concerns (transactions, security, logging, metrics, caching) that would otherwise be duplicated across many classes. You declare the concern once (an aspect) plus a pattern for where it applies (a pointcut), and the framework weaves it in — leaving business methods containing only business logic.
@@ -459,7 +490,7 @@ It historically did, because subclass instantiation called a superclass construc
 
 ---
 
-## 8. Retention check
+## 10. Retention check
 
 1. Why does Spring AOP only support method-execution join points? Tie it to the implementation choice.
 2. Trace, object by object, why `@Transactional` doesn't apply when a method is called via `this.`.

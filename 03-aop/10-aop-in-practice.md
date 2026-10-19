@@ -6,7 +6,15 @@
 
 ---
 
-## 1. Setup
+## 1. The idea in one sentence
+
+> **An aspect adds behaviour that is invisible at the call site, so the only aspects worth writing are the ones where invisibility is a feature — infrastructural, identical everywhere, and wrong to forget — and every other use is a bug you've hidden from the next reader.**
+
+That test, *"would a new team member reading only this method be surprised?"*, decides every question in this lesson. It is also why each aspect you keep needs a test proving it actually applies: a pointcut that matches nothing fails silently.
+
+---
+
+## 2. Setup
 
 ```xml
 <dependency>
@@ -27,7 +35,7 @@ public class TimingAspect { }
 
 ---
 
-## 2. Pointcut expressions
+## 3. Pointcut expressions
 
 ### `execution()` — the workhorse
 
@@ -155,7 +163,7 @@ public Object advice(ProceedingJoinPoint pjp) throws Throwable {
 
 ---
 
-## 3. The three aspects genuinely worth writing
+## 4. The three aspects genuinely worth writing
 
 I'm giving you three, not fifteen, deliberately. These cover ~90% of legitimate custom-aspect use in real systems. Everything else is usually better solved by a filter, an interceptor, an event, or just a method call.
 
@@ -312,7 +320,7 @@ Lower `@Order` = outer = runs first on the way in, last on the way out. **`@Tran
 
 ---
 
-## 4. When NOT to use AOP
+## 5. When NOT to use AOP
 
 This section matters more than the syntax. **Reviewers are far more impressed by restraint than by cleverness.**
 
@@ -371,7 +379,7 @@ That's roughly the whole list. **If your aspect isn't on it, argue for it carefu
 
 ---
 
-## 5. Testing aspects
+## 6. Testing aspects
 
 **Untested aspects are worse than no aspect**, because a silently non-matching pointcut gives you false confidence in a security or audit control.
 
@@ -418,7 +426,7 @@ That's a genuinely nice technique very few people know.
 
 ---
 
-## 6. Build this
+## 7. Build & break
 
 Work in `com.vigil.playground.aop2`.
 
@@ -440,9 +448,37 @@ Work in `com.vigil.playground.aop2`.
 
 **6. Write the tests** from §5, including the guard test and the pointcut-matching assertion.
 
+### Explain out loud (60s)
+
+1. The one test that decides whether something belongs in an aspect.
+2. Four ways an aspect can fail silently, and the single guard test that catches them.
+3. `@annotation` vs `@within` vs `this()` vs `target()`.
+4. Where your aspect runs relative to the transaction commit, and how `@Order` controls it.
+5. Three things people write aspects for that Spring already provides.
+
 ---
 
-## 7. Interview traps
+## 8. Production rules
+
+| Do / Never | Why |
+|---|---|
+| **Put `@Component` on every `@Aspect`** | `@Aspect` is not a stereotype, so without it the class is never a bean and the aspect simply never runs — with no error |
+| **Write a test that proves each aspect applies** | A typo'd pointcut matches nothing and reports nothing; for a security or audit aspect, silent non-application is the failure you can't afford |
+| **Prefer `@annotation`/`@within` pointcuts over package or name patterns** | An annotation is explicit at every call site and greppable; a package pattern breaks silently the day someone renames a package |
+| **Keep named pointcuts in one shared library class** | It stops the same fragile expression being copy-pasted into eight aspects, where only some get fixed |
+| **Always rethrow in `@Around`'s catch block** | Swallowing the exception makes the caller believe the operation succeeded — the worst possible failure mode |
+| **Always return `pjp.proceed()`'s result** | Returning `null` instead gives the caller a mysterious NPE far from the aspect that caused it |
+| **Use `AnnotatedElementUtils.findMergedAnnotation`, not raw `getAnnotation`** | Raw reflection doesn't walk meta-annotations, interfaces or superclasses, so composed annotations are missed |
+| **Know where every aspect of yours runs relative to commit, and set `@Order` to say so** | `@Transactional` advice sits at lowest precedence, so an un-ordered aspect's `finally` runs *after* commit — which is right for publishing and wrong for reading uncommitted state |
+| **Never put business rules in an aspect** | A quota or pricing check that isn't in the method, the tests or the call graph costs the next reader an hour and can't be debugged where it's used |
+| **Never hand-roll what Spring already provides** | `@Transactional`, `@Cacheable`, `@Retryable`, `@Async`, `@PreAuthorize`, Micrometer `@Observed` — each is a tested aspect you'd be reimplementing worse |
+| **Put HTTP-level concerns in the filter chain, not an aspect** | Filters see the raw request, run for 404s and errors that never reach a controller, and can short-circuit; a controller aspect sees none of that |
+| **Redact arguments before logging them** | Logging `pjp.getArgs()` wholesale is how passwords and tokens reach a log aggregator you can't purge |
+| **Publish audit events; don't insert them synchronously** | A DB insert inside the aspect doubles write latency and ties business availability to the audit table |
+
+---
+
+## 9. Interview traps
 
 **Q1. How do you create an aspect in Spring Boot?**
 Add `spring-boot-starter-aop`; annotate a class `@Aspect` **and** `@Component`; write advice methods with pointcut expressions. Boot auto-enables `@EnableAspectJAutoProxy`. Forgetting `@Component` is the classic mistake — `@Aspect` isn't a stereotype.
@@ -476,7 +512,7 @@ Audit logging for compliance (SOC 2 / GDPR): genuinely cross-cutting, must not b
 
 ---
 
-## 8. Retention check
+## 10. Retention check
 
 1. Why must an `@Aspect` also be `@Component`, and what happens if it isn't?
 2. Give three things a typo'd pointcut and a forgotten `@Component` have in common. (Hint: it's the reason for one specific test.)
