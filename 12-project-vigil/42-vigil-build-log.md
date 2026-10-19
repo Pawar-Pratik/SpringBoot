@@ -1,8 +1,12 @@
 # Lesson 42 — Vigil build log
 
+> **Why this lesson exists:** side projects die in the middle, not at the start, and the build order is what decides whether you keep going. These fourteen phases are sequenced so something runnable exists at the end of every one, so each phase uses only lessons you have already read, and so "done" is an acceptance criterion rather than a feeling.
+
 > **This is your project plan.** Fourteen phases, each independently shippable, each with **acceptance criteria** so you always know what "done" means. Follow it in order — every phase depends on the previous one, and every phase maps to lessons you've already read.
 >
 > **The rule: do not start a phase until the previous one meets its acceptance criteria.** Half-finished features are how side projects die.
+
+**Time:** 14 phases · roughly 70–100 hours total · **Prereq:** Lesson 41
 
 ---
 
@@ -34,7 +38,7 @@
 
 **Build**
 - `start.spring.io`: Maven, Java 21, Boot 3.5.x. Dependencies: Web, Actuator, Validation, Lombok
-- Package structure from [Lesson 13](../04-spring-boot/13-project-structure.md) §8 (empty packages with `package-info.java`)
+- Package structure from [Lesson 13](../04-spring-boot/13-project-structure.md) §9 (empty packages with `package-info.java`)
 - `compose.yaml` with Postgres 16 + Redis, health-gated
 - `application.yml` + `application-local.yml` (gitignored) + `application-local.yml.example` (committed)
 - `.gitignore`, `.dockerignore`, `README.md` skeleton, `LICENSE` (Apache 2.0)
@@ -286,7 +290,7 @@ curl -i -X POST localhost:8080/api/v1/monitors -H 'Content-Type: application/jso
 - ArchUnit: 8+ rules including `transactionalMethodsMustBePublic` and `noEntitiesFromControllers`
 - OpenAPI snapshot test
 - Surefire/Failsafe split (`*Test` vs `*IT`); parallel execution enabled
-- The CI pipeline from [Lesson 31](../08-testing/31-advanced-testing-strategy.md) §6
+- The CI pipeline from [Lesson 31](../08-testing/31-advanced-testing-strategy.md) §7
 
 **Prove it**
 - [ ] `./mvnw test` completes in **under 30 seconds**

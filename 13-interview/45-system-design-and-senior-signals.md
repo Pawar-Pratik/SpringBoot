@@ -1,12 +1,20 @@
 # Lesson 45 — System design & senior signals
 
-> **The final lesson.** Everything so far has been knowledge. This is about *how you use it under pressure* — in a design round, in a code review, in a behavioural question. The difference between a mid-level and a senior candidate is almost never knowledge; it's **judgment, trade-off awareness, and knowing what you don't know.** Those are demonstrable, and this lesson shows you how.
+> **Why this lesson exists:** this is the final lesson. Everything so far has been knowledge. This is about *how you use it under pressure* — in a design round, in a code review, in a behavioural question. The difference between a mid-level and a senior candidate is almost never knowledge; it's **judgment, trade-off awareness, and knowing what you don't know.** Those are demonstrable, and this lesson shows you how.
 
 **Time:** ~65 minutes
 
 ---
 
-## 1. What "senior" actually means in an interview
+## 1. The idea in one sentence
+
+> **Seniority in an interview is almost never demonstrated by knowing more — it's demonstrated by naming the trade-off, saying plainly what you don't know, and choosing the simpler option for a stated reason.**
+
+Everything that follows is a way of making that visible under time pressure: a design framework that forces you to clarify before you solve, phrases that signal calibration rather than confidence, and the discipline of saying "it depends" and then immediately saying what it depends on.
+
+---
+
+## 2. What "senior" actually means in an interview
 
 Most candidates think they're being assessed on knowledge. They're not, or not primarily. Here's what's actually being scored:
 
@@ -27,7 +35,7 @@ Most candidates think they're being assessed on knowledge. They're not, or not p
 
 ---
 
-## 2. The habits that make you sound senior
+## 3. The habits that make you sound senior
 
 These are mechanical. You can adopt them today, and they change how every answer lands.
 
@@ -114,7 +122,7 @@ Senior: "I know the second-level cache is per-JVM by default, which is why I avo
 
 ---
 
-## 3. The system design round
+## 4. The system design round
 
 Spring-flavoured design rounds are usually 35–50 minutes for something like: *"Design an uptime monitoring service"* (convenient), *"Design a notification service"*, *"Design a URL shortener"*, *"Design a rate limiter"*, *"Design a job scheduler."*
 
@@ -227,7 +235,7 @@ Close by summarizing what you chose *and rejected*:
 
 ---
 
-## 4. The code review round
+## 5. The code review round
 
 Increasingly common, and Spring-specific. You're shown code and asked what's wrong. **Have a scan order** so you don't miss the important things while noticing the trivial ones.
 
@@ -316,7 +324,7 @@ public class MonitorController {
 
 ---
 
-## 5. Behavioural questions — with real answers
+## 6. Behavioural questions — with real answers
 
 Use **STAR** (Situation, Task, Action, Result) but **weight it toward Action and Result** — the situation should be two sentences, not two minutes. And **always end with what you changed structurally**, because that's what's actually being assessed.
 
@@ -364,7 +372,7 @@ Answer honestly, but connect it to depth: *"I want to be the person a team relie
 
 ---
 
-## 6. Questions to ask *them*
+## 7. Questions to ask *them*
 
 The questions you ask are assessed. Ask things that reveal engineering culture — and that you'd genuinely want to know.
 
@@ -383,7 +391,7 @@ The questions you ask are assessed. Ask things that reveal engineering culture �
 
 ---
 
-## 7. Red flags to avoid
+## 8. Red flags to avoid
 
 | Don't | Why it costs you |
 |---|---|
@@ -400,7 +408,7 @@ The questions you ask are assessed. Ask things that reveal engineering culture �
 
 ---
 
-## 8. The twelve statements that signal expertise
+## 9. The twelve statements that signal expertise
 
 Each is a compressed, memorable version of something from this course. **Deploy them naturally, not as a list.** Any one of them, said at the right moment, changes how you're perceived.
 
@@ -423,7 +431,7 @@ Each is a compressed, memorable version of something from this course. **Deploy 
 
 ---
 
-## 9. Your final self-assessment
+## 10. Your final self-assessment
 
 **Go through this honestly.** For each item: can you explain it out loud, to an imagined colleague, without notes, in under 90 seconds?
 
@@ -480,7 +488,7 @@ Each is a compressed, memorable version of something from this course. **Deploy 
 
 ---
 
-## 10. Where to go from here
+## 11. Where to go from here
 
 You've reached the end of the curriculum. **The material stops being the constraint now; experience becomes the constraint.** Three things compound faster than more reading:
 

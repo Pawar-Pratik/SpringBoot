@@ -1,10 +1,20 @@
 # Lesson 44 — Rapid-fire master Q&A
 
-> **The whole course, revisable in 90 minutes.** Cover the answers. Say yours out loud *before* reading. Failing to recall is what builds retrieval strength — being reminded of an answer feels identical and is nearly useless under pressure.
+> **Why this lesson exists:** this is the whole course, revisable in 90 minutes. Cover the answers. Say yours out loud *before* reading. Failing to recall is what builds retrieval strength — being reminded of an answer feels identical and is nearly useless under pressure.
 >
 > **How to use this:** first pass, answer everything and mark what you missed. Second pass (next day), only the misses. Third pass (a week later), only the misses again. Anything still missing after three passes, go back to the lesson.
 
+**Time:** ~90 min for a full pass · ~30 min to re-test the misses
+
 **Legend:** ⭐ = asked in almost every interview · 🔥 = separates senior from mid-level
+
+---
+
+## The idea in one sentence
+
+> **A strong answer names the mechanism, not the behaviour — "a proxy only intercepts calls that arrive through it" beats "self-invocation doesn't work", every single time.**
+
+Score yourself on that, not on whether you were technically right. If your answer would satisfy someone who already knows the topic, it's complete. If it restates the question in different words, mark it as a miss and go back to the lesson.
 
 ---
 

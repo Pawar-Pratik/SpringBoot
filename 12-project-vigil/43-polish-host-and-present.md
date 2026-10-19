@@ -1,6 +1,6 @@
 # Lesson 43 — Polish, host & present it
 
-> **A project nobody looks at is worth nothing.** This lesson is about the last 5% of effort that determines whether Vigil gets you interviews or sits unviewed on GitHub. It's the least technical lesson in the course and possibly the highest-return one.
+> **Why this lesson exists:** a project nobody looks at is worth nothing. This lesson is about the last 5% of effort that determines whether Vigil gets you interviews or sits unviewed on GitHub. It's the least technical lesson in the course and possibly the highest-return one.
 
 **Time:** ~50 minutes of reading, several hours of doing
 
@@ -192,7 +192,7 @@ statically generated page on a CDN with no application involvement at all.
 
 ### `docs/adr/001-extract-checker-service.md`
 
-Use the format from [Lesson 38](../10-microservices/38-microservices-fundamentals.md) §7: Context (with **measurements**) → Decision → Consequences (**including the negatives**) → Alternatives considered (**including what you rejected and why**).
+Use the format from [Lesson 38](../10-microservices/38-microservices-fundamentals.md) §8: Context (with **measurements**) → Decision → Consequences (**including the negatives**) → Alternatives considered (**including what you rejected and why**).
 
 **ADRs are one of the strongest artifacts in a portfolio** because they're evidence of *reasoning*, and reasoning is what's actually being assessed. Write 3–5. Include one where you chose the boring option.
 

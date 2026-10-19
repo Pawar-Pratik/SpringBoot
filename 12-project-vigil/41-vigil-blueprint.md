@@ -1,6 +1,10 @@
 # Lesson 41 — Vigil: the blueprint
 
+> **Why this lesson exists:** "walk me through something you built" is the question most interviews turn on, and the only good answer is a system you can defend at any depth. Vigil is that system — a multi-tenant uptime platform chosen because it *forces* every hard topic in this course for real reasons: work distributed across replicas, tenant isolation, at-least-once delivery, time-series volume, and a status page that must stay up precisely when everything else is down.
+
 > **Read this early** (skim it after Module 2) so you know where you're heading, then return to it whenever you need the full picture. This is the specification — the domain model, the API, the architecture, and the reasoning behind each decision. **The reasoning is the valuable part**: anyone can build CRUD, but being able to explain *why* your schema, boundaries and trade-offs are what they are is what makes this project interview leverage rather than a code sample.
+
+**Time:** ~55 minutes to read and internalise · **Prereq:** Module 2
 
 ---
 
@@ -70,17 +74,17 @@
 
 | Decision | Why |
 |---|---|
-| **`Membership` as an entity, not `@ManyToMany`** | It needs `role`, `joinedAt`, `invitedBy` — a join table can't hold them, and retrofitting is a migration (Lesson 21 §2) |
-| **`Monitor.config` as `jsonb`** | Per-type configuration differs (expected status, keyword, TCP port, cert expiry threshold). A rigid column set would be mostly nulls; entity inheritance would be heavier than the problem warrants (Lesson 21 §5) |
-| **`CheckResult` has no JPA cascade from `Monitor`** | Millions of rows — a cascade would load them all into the persistence context. Uses DB-level `ON DELETE CASCADE` + a bulk delete (Lesson 21 §3) |
-| **`CheckResult` written with `JdbcClient`, not JPA** | Batched, append-only, no entity semantics needed. JPA's per-entity overhead is pure cost here (Lesson 19 §4) |
-| **UUIDv7 primary keys** | Non-enumerable (multi-tenant API — no `/monitors/1` walking) but time-ordered, so no B-tree fragmentation on a high-insert table (Lesson 20 §4) |
-| **`@Version` on `Monitor` and `Incident`** | Concurrently edited by humans; optimistic locking prevents lost updates and yields a 409 (Lesson 23 §5) |
-| **`nextCheckAt` on `Monitor`** | Enables `FOR UPDATE SKIP LOCKED` work claiming — horizontal scaling with no coordinator (Lesson 32 §2) |
-| **`org_id` on every table** | Discriminator multi-tenancy: best scale for many small tenants, defended in four layers (Lesson 24 §4) |
-| **`OutboxMessage`** | Atomic "state changed" + "notification owed" (Lesson 32 §3) |
+| **`Membership` as an entity, not `@ManyToMany`** | It needs `role`, `joinedAt`, `invitedBy` — a join table can't hold them, and retrofitting is a migration (Lesson 21 §3) |
+| **`Monitor.config` as `jsonb`** | Per-type configuration differs (expected status, keyword, TCP port, cert expiry threshold). A rigid column set would be mostly nulls; entity inheritance would be heavier than the problem warrants (Lesson 21 §6) |
+| **`CheckResult` has no JPA cascade from `Monitor`** | Millions of rows — a cascade would load them all into the persistence context. Uses DB-level `ON DELETE CASCADE` + a bulk delete (Lesson 21 §4) |
+| **`CheckResult` written with `JdbcClient`, not JPA** | Batched, append-only, no entity semantics needed. JPA's per-entity overhead is pure cost here (Lesson 19 §5) |
+| **UUIDv7 primary keys** | Non-enumerable (multi-tenant API — no `/monitors/1` walking) but time-ordered, so no B-tree fragmentation on a high-insert table (Lesson 20 §5) |
+| **`@Version` on `Monitor` and `Incident`** | Concurrently edited by humans; optimistic locking prevents lost updates and yields a 409 (Lesson 23 §6) |
+| **`nextCheckAt` on `Monitor`** | Enables `FOR UPDATE SKIP LOCKED` work claiming — horizontal scaling with no coordinator (Lesson 32 §3) |
+| **`org_id` on every table** | Discriminator multi-tenancy: best scale for many small tenants, defended in four layers (Lesson 24 §5) |
+| **`OutboxMessage`** | Atomic "state changed" + "notification owed" (Lesson 32 §4) |
 | **`ProcessedEvent` + a unique constraint on `(monitor_id, checked_at)`** | Idempotent consumers for at-least-once delivery (Lessons 34, 37) |
-| **`tokenVersion` on `AppUser`** | Immediate JWT revocation on password/role change (Lesson 26 §6) |
+| **`tokenVersion` on `AppUser`** | Immediate JWT revocation on password/role change (Lesson 26 §7) |
 
 **Two of these are worth volunteering unprompted in an interview**, because they show genuine depth: the UUIDv7 reasoning (security *and* index locality, a trade-off most people don't know exists) and the `SKIP LOCKED` design (horizontal scaling with no broker or leader election).
 
@@ -140,7 +144,7 @@ CREATE POLICY tenant_isolation ON monitor
 
 1. **The partial index** — the scheduler's query is `WHERE next_check_at <= now() AND status <> 'PAUSED'`, so indexing only non-paused rows makes it dramatically smaller and keeps it hot in cache.
 2. **`org_id` denormalized onto `check_result`** — it's derivable via `monitor_id`, but joining on every tenant-scoped query and for RLS would be wasteful. **A deliberate, justified denormalization.**
-3. **`UNIQUE (monitor_id, checked_at)`** — this is idempotency *enforced by the database*, so at-least-once delivery from the outbox is automatically safe (Lesson 34 §5).
+3. **`UNIQUE (monitor_id, checked_at)`** — this is idempotency *enforced by the database*, so at-least-once delivery from the outbox is automatically safe (Lesson 34 §6).
 4. **Monthly partitioning** — retention becomes `DROP PARTITION` (instant, no bloat) instead of `DELETE` over millions of rows (slow, generates dead tuples, needs `VACUUM`).
 
 ---
@@ -186,7 +190,7 @@ com.vigil
        └────────── Kafka ──────────────┘
 ```
 
-**Justified by measurement, in an ADR** (Lesson 38 §7). And **note what stays together:** orgs, monitors, quotas and incidents are all in `vigil-api`, because creating a monitor must check the plan quota in one transaction. **Avoiding a saga by drawing the boundary correctly is the better engineering choice**, and saying so is stronger than building the saga.
+**Justified by measurement, in an ADR** (Lesson 38 §8). And **note what stays together:** orgs, monitors, quotas and incidents are all in `vigil-api`, because creating a monitor must check the plan quota in one transaction. **Avoiding a saga by drawing the boundary correctly is the better engineering choice**, and saying so is stronger than building the saga.
 
 ---
 
@@ -244,12 +248,12 @@ GET    /v3/api-docs  ·  /swagger-ui.html
 
 **Design decisions to be able to defend:**
 
-- **Tenant in the path** (`/orgs/{orgId}/...`) — explicit, cacheable, and verified against memberships by a guard. **Still validated server-side** — a path variable is client input (Lesson 28 §3).
-- **Cursor pagination for check results, offset for monitors** — millions of append-only rows versus a small set needing page numbers. **Different access patterns, different strategies** (Lesson 16 §4).
-- **ETags on monitors and status pages** — the status page is polled by many browsers; 304s cost nothing (Lesson 33 §7).
-- **`Idempotency-Key` on POST** — clients retry on timeout (Lesson 34 §5).
-- **`If-Match` on PUT → 409** — optimistic locking surfaced properly in HTTP (Lesson 23 §5).
-- **`RFC 9457 ProblemDetail` for every error**, with a correlation ID (Lesson 16 §3).
+- **Tenant in the path** (`/orgs/{orgId}/...`) — explicit, cacheable, and verified against memberships by a guard. **Still validated server-side** — a path variable is client input (Lesson 28 §4).
+- **Cursor pagination for check results, offset for monitors** — millions of append-only rows versus a small set needing page numbers. **Different access patterns, different strategies** (Lesson 16 §5).
+- **ETags on monitors and status pages** — the status page is polled by many browsers; 304s cost nothing (Lesson 33 §8).
+- **`Idempotency-Key` on POST** — clients retry on timeout (Lesson 34 §6).
+- **`If-Match` on PUT → 409** — optimistic locking surfaced properly in HTTP (Lesson 23 §6).
+- **`RFC 9457 ProblemDetail` for every error**, with a correlation ID (Lesson 16 §4).
 - **Actions as sub-resources** (`/pause`, `/acknowledge`) — a pragmatic departure from REST purism for operations that aren't CRUD. **Being willing to say "I chose pragmatism here, and here's why" is better than defending dogma.**
 
 ---
