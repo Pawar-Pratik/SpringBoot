@@ -6,7 +6,15 @@
 
 ---
 
-## 1. Why an API gateway
+## 1. The idea in one sentence
+
+> **Authentication belongs at the edge; authorization belongs in the service — because the gateway knows who is calling but only the service knows whether *this* user may touch *this* row.**
+
+Get that split wrong in one direction and you have a gateway full of business logic; wrong in the other and you have services with no authorization at all, trusting a header anyone could have sent.
+
+---
+
+## 2. Why an API gateway
 
 ```
 WITHOUT a gateway                      WITH a gateway
@@ -36,7 +44,7 @@ Each service implements:                · rate limiting (globally)
 
 ---
 
-## 2. Spring Cloud Gateway
+## 3. Spring Cloud Gateway
 
 ```xml
 <dependency>
@@ -155,7 +163,7 @@ public class CorrelationIdGatewayFilter implements GlobalFilter {
 
 ---
 
-## 3. Authentication at the edge
+## 4. Authentication at the edge
 
 ```
                     ┌─────────────────────────────────────┐
@@ -201,7 +209,7 @@ The gateway can check "is this a valid token?" It cannot check "may *this* user 
 
 ---
 
-## 4. BFF — Backend for Frontend
+## 5. BFF — Backend for Frontend
 
 ```
                     ┌──── web-bff ────┐        different clients need
@@ -229,7 +237,7 @@ The gateway can check "is this a valid token?" It cannot check "may *this* user 
 
 ---
 
-## 5. Service mesh — know the concept and the trade-off
+## 6. Service mesh — know the concept and the trade-off
 
 ```
 WITHOUT a mesh: every service implements resilience in its own code
@@ -260,7 +268,7 @@ WITH a mesh: a sidecar proxy handles it, transparently
 
 ---
 
-## 6. Versioning and coordinated change
+## 7. Versioning and coordinated change
 
 **The core problem: services deploy independently, so two versions coexist. Every change must be compatible with the version currently running.**
 
@@ -293,7 +301,7 @@ Adding a new event type:            deploy CONSUMERS first (so they're ready to 
 
 ---
 
-## 7. The gateway's own failure modes
+## 8. The gateway's own failure modes
 
 **The gateway is a single point of failure, so it needs more care than the services behind it.**
 
@@ -312,7 +320,7 @@ Adding a new event type:            deploy CONSUMERS first (so they're ready to 
 
 ---
 
-## 8. Build this — Vigil's gateway (optional, after the split)
+## 9. Build & break — Vigil's gateway (optional, after the split)
 
 **1. Create `vigil-gateway`** with `spring-cloud-starter-gateway`, routes for `/api/v1/**` → api, `/status/**` → api, and `/internal/**` → checker (header-gated).
 
@@ -339,9 +347,38 @@ curl -H "Authorization: Bearer $USER_TOKEN" -H "X-User-Id: <admin-uuid>" \
 
 **10. Gateway resilience.** Run two gateway replicas behind an nginx or Docker Compose load balancer. Kill one mid-load-test and **confirm zero failed requests.** Then confirm the gateway's own health check doesn't depend on backend health.
 
+### Explain out loud (60s)
+
+1. Why authentication goes at the edge and authorization stays in the service.
+2. The three characters of missing code that become an authentication bypass.
+3. Why retrying a POST at the gateway is a duplicate-creation machine.
+4. The deploy-ordering rule for additive versus removal changes.
+5. When a service mesh is worth it, and what you'd move out of the application if you adopted one.
+
 ---
 
-## 9. Interview traps
+## 10. Production rules
+
+| Do / Never | Why |
+|---|---|
+| **Never put blocking code in a gateway filter** | Spring Cloud Gateway runs on WebFlux with a handful of event-loop threads, so one blocking call freezes the whole edge |
+| **Strip every client-supplied internal header before setting your own** | If downstream services trust `X-User-Id` and the gateway forwards one, any client can impersonate any user — a complete auth bypass |
+| **Retry only idempotent methods at the gateway** | A retried POST after a timeout creates a duplicate, because the request may have succeeded and only the response was lost |
+| **Set different rate limits per route** | One global limit is either too loose for public status pages or too tight for paying customers — usually both at once |
+| **Validate the token in every service, not just at the edge** | Trusting the gateway makes the network your security boundary, which is precisely the assumption zero-trust exists to reject |
+| **Keep business rules out of the gateway** | It is routing and policy; the moment domain logic accretes there, you have a distributed monolith with a new single point of failure |
+| **Use Reactor `Context`, not MDC, inside gateway filters** | A reactive request hops threads between operators, so a `ThreadLocal` simply doesn't follow it |
+| **Run several stateless gateway replicas behind an L4 load balancer** | It is a single point of failure for everything behind it, so it needs more redundancy than the services it fronts |
+| **Apply per-route timeouts, breakers and bulkheads at the edge** | Without them one slow backend saturates the gateway's connections and takes down routes that don't touch it |
+| **Deploy additive changes provider-first and removals consumer-first** | Getting it backwards causes a brief outage on every rolling deploy — short enough to dismiss, frequent enough to erode trust |
+| **Back independent deploys with contract tests** | Without them "independently deployable" is a slogan; teams coordinate anyway, out of fear |
+| **Reach for a BFF only at three or more genuinely different clients** | Each one is code someone must own; with a single web client, a good REST API with sparse fieldsets is enough |
+| **Name GraphQL's three costs before recommending it** | Caching gets harder, N+1 returns needing DataLoader, and query complexity is a real DoS vector needing depth limits |
+| **Don't retry in both the mesh and the application** | Two layers of retries and timeouts interact in ways nobody has reasoned about — pick one layer and move the policy there |
+
+---
+
+## 11. Interview traps
 
 **Q1. What does an API gateway do, and what are the risks?**
 Single entry point providing routing, authentication, rate limiting, CORS, TLS termination, and trace initiation — implemented once instead of N times. Risks: it's a single point of failure (so it needs more replicas and better health checks than what's behind it), it adds a latency hop, and it accretes business logic if not policed. Keep it dumb: routing and policy only.
@@ -381,7 +418,7 @@ Per-route timeouts, circuit breakers, and **bulkheads per route**, so a slow che
 
 ---
 
-## 10. Retention check
+## 12. Retention check
 
 1. Give the one-line rule for what the gateway does versus what the service does, regarding auth.
 2. Name the two most dangerous gateway misconfigurations and the harm each causes.

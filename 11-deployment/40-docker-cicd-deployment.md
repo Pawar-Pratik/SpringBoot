@@ -6,7 +6,15 @@
 
 ---
 
-## 1. The 12-Factor principles that actually matter
+## 1. The idea in one sentence
+
+> **One artifact, promoted through environments, differing only in what the environment hands it — if you rebuild per environment you are not testing what you ship, and everything else in this lesson exists to make that one image start fast, stop cleanly, and be replaceable at any moment.**
+
+That is also why a deploy is a correctness problem rather than a packaging one: during a rolling release two versions run at once against one database, so the schema, the API and the shutdown behaviour all have to tolerate having a predecessor.
+
+---
+
+## 2. The 12-Factor principles that actually matter
 
 Not all twelve are equally important. These five determine whether deployment is calm or terrifying:
 
@@ -24,7 +32,7 @@ Not all twelve are equally important. These five determine whether deployment is
 
 ---
 
-## 2. Dockerizing a Spring Boot app properly
+## 3. Dockerizing a Spring Boot app properly
 
 ### The naive version, and why it's wrong
 
@@ -133,7 +141,7 @@ FROM eclipse-temurin:21-jre-alpine@sha256:abc123...
 
 ---
 
-## 3. Docker Compose — the whole platform locally
+## 4. Docker Compose — the whole platform locally
 
 ```yaml
 # compose.yaml
@@ -209,7 +217,7 @@ Add a `compose.override.yaml` for local development conveniences (source mounts,
 
 ---
 
-## 4. Kubernetes essentials
+## 5. Kubernetes essentials
 
 You don't need to be an expert, but these are the objects and settings that come up.
 
@@ -304,7 +312,7 @@ t=~12   In-flight complete → beans destroyed (@PreDestroy) → JVM exits
 
 ---
 
-## 5. CI/CD
+## 6. CI/CD
 
 ```yaml
 # .github/workflows/deploy.yml
@@ -420,7 +428,7 @@ Destructive change (drop or rename a column):
 
 ---
 
-## 6. Hosting Vigil for real — pick one and ship it
+## 7. Hosting Vigil for real — pick one and ship it
 
 **This is the step that makes the project count.** A live URL transforms how it's received.
 
@@ -487,7 +495,7 @@ fly deploy
 
 ---
 
-## 7. Build this
+## 8. Build & break
 
 **1. The multi-stage Dockerfile** from §2 with layer extraction and a non-root user. Then measure:
 ```bash
@@ -548,9 +556,40 @@ docker compose up -d --build vigil
 
 **11. Verify your backup.** Take a backup, restore it into a fresh database, and confirm the data is intact. **An untested backup is a hope, not a backup** — and this is a genuinely common real-world failure.
 
+### Explain out loud (60s)
+
+1. Why one artifact promoted through environments matters more than any other 12-factor rule.
+2. What layer extraction changes about a deploy, in numbers.
+3. The `preStop` sleep: the race it closes, and why graceful shutdown alone isn't enough.
+4. Where migrations should run, and the ordering rule that makes rolling deploys safe.
+5. Why blue/green doesn't excuse you from expand/contract.
+
 ---
 
-## 8. Interview traps
+## 9. Production rules
+
+| Do / Never | Why |
+|---|---|
+| **Build one image and promote it** | The exact artifact that passed CI runs in staging and production; rebuilding per environment is the root of a whole genre of surprise |
+| **Keep processes stateless** | An in-memory session, local temp file or in-process scheduler state makes instances non-interchangeable, which breaks scaling and rolling deploys |
+| **Copy dependency descriptors first and extract Boot's layers** | Source changes then don't invalidate the dependency layer, which is the difference between pushing a few megabytes and a few hundred |
+| **Use `-XX:MaxRAMPercentage`, never a hardcoded `-Xmx`** | The JVM reads the cgroup limit, so changing the pod's memory no longer leaves a latent OOMKill behind |
+| **Pass flags via `JAVA_TOOL_OPTIONS`, not a hardcoded `ENTRYPOINT`** | An operator can then add a flag at deploy time without rebuilding and re-promoting the image |
+| **Write a `.dockerignore`** | Otherwise `target/`, `.git` and `.env` go into the build context — half a gigabyte of history and, sometimes, your secrets |
+| **Pin image digests in production, not floating tags** | A tag can be moved under you, which makes "the same deploy" produce a different image |
+| **Make `docker compose up` bring up the whole platform** | A reviewer who can't run your project in one command won't run it, and an unrun project is an unassessed project |
+| **Gate Compose dependencies on `service_healthy`** | Plain `depends_on` waits for the container to start, not for Postgres to accept connections, so your app starts and crashes |
+| **Add a `preStop` sleep before SIGTERM** | Endpoint removal propagates asynchronously, so for a few hundred milliseconds traffic still arrives at a pod that has begun shutting down |
+| **Keep `terminationGracePeriodSeconds` above `preStop` plus the shutdown timeout** | Otherwise Kubernetes SIGKILLs you mid-request and `@PreDestroy` never runs |
+| **Run migrations as a Job or init container, not on pod startup** | One execution instead of N pods racing, and the deploy fails before any new pod starts if the migration does |
+| **Never backfill millions of rows in a startup migration** | It blocks the deploy, may hold locks, and gives you no progress visibility — schema as a migration, data as a batched job |
+| **Expand/contract regardless of deployment strategy** | Blue/green doesn't save you: both environments share one database, so a destructive migration breaks the old one immediately |
+| **Scale I/O-bound workers on a backlog metric, not CPU** | A checker waiting on the network shows almost no CPU, so a CPU-based autoscaler never reacts to the work piling up |
+| **Deploy it somewhere real** | A live URL is the single biggest difference between a portfolio project that gets opened and one that gets skimmed |
+
+---
+
+## 10. Interview traps
 
 **Q1. How do you containerize a Spring Boot app properly?**
 Multi-stage build (JDK to build, JRE to run), dependencies downloaded as their own cached layer, **extract the fat JAR into layers** (`-Djarmode=tools extract --layers`) ordered least- to most-frequently-changed so a code change pushes ~400KB instead of 60MB, a non-root user, `-XX:MaxRAMPercentage` for container awareness, and a health check. Or use Buildpacks (`spring-boot:build-image`), which does all of it without a Dockerfile.
@@ -590,7 +629,7 @@ Fly.io or Railway for the fastest path with managed Postgres and Redis; a Hetzne
 
 ---
 
-## 9. Retention check
+## 11. Retention check
 
 1. Why does layer extraction reduce a deploy from 60MB to 400KB?
 2. Explain the `preStop` sleep — what race does it close?

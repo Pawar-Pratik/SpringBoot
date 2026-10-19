@@ -6,7 +6,15 @@
 
 ---
 
-## 1. The honest case against microservices — start here
+## 1. The idea in one sentence
+
+> **Microservices solve an *organizational* problem — letting separate teams deploy separately — and you pay for that with everything a monolith gave you free: one transaction, one stack trace, one deployment, immediate consistency.**
+
+Which makes the whole lesson a question of evidence. Extract a service when you can name the scaling profile, the team, or the isolation requirement that demands it; otherwise a modular monolith buys you the same design discipline at none of the distributed-systems cost.
+
+---
+
+## 2. The honest case against microservices — start here
 
 **Almost every microservices interview question is really testing whether you understand the costs.** A candidate who says "microservices are more scalable and maintainable" has read marketing. A candidate who can list what you *lose* has done the work.
 
@@ -56,7 +64,7 @@
 
 ---
 
-## 2. Where the boundaries go
+## 3. Where the boundaries go
 
 ### The one rule: a service owns its data
 
@@ -142,7 +150,7 @@
 
 ---
 
-## 3. Communication patterns
+## 4. Communication patterns
 
 ### Synchronous vs asynchronous
 
@@ -216,7 +224,7 @@ service asks a registry             a load balancer/DNS resolves it
 
 ---
 
-## 4. Distributed data — the actual hard part
+## 5. Distributed data — the actual hard part
 
 ### The problem, concretely
 
@@ -322,7 +330,7 @@ void updateUptimeSummary(CheckResultEvent e) { uptimeSummaryRepo.upsert(e); }
 
 ---
 
-## 5. Cross-cutting concerns
+## 6. Cross-cutting concerns
 
 ### Configuration
 Kubernetes ConfigMaps and Secrets, or Spring Cloud Config (Lesson 12). **Per-service config, not one shared file** — a shared config file is the same coupling problem as a shared database.
@@ -343,7 +351,7 @@ Each service owns its schema and its migrations. But **you must still coordinate
 
 ---
 
-## 6. The strangler fig pattern
+## 7. The strangler fig pattern
 
 **How you actually migrate, and the answer to "how would you break up a monolith?"**
 
@@ -376,7 +384,7 @@ Phase 5: the monolith shrinks — possibly to nothing, possibly not, and that's 
 
 ---
 
-## 7. Build this — split Vigil (optional but a strong differentiator)
+## 8. Build & break — split Vigil (optional but a strong differentiator)
 
 **Do this only after the monolith is complete and working.** The point is to demonstrate a *justified* split, not to have "microservices" on a CV.
 
@@ -436,9 +444,38 @@ Seed 10,000 monitors. **Show that 5 checkers process the backlog ~5× faster tha
 
 **That paragraph — being willing to say part of your own architecture wasn't worth it — is more impressive than the architecture.** It's evidence of judgment rather than enthusiasm, and it's exactly what distinguishes a senior engineer.
 
+### Explain out loud (60s)
+
+1. What a monolith gives you free that a microservice takes away — five items.
+2. The two things microservices genuinely buy, and why one is organizational.
+3. Three defensible reasons to extract a service, and three bad ones.
+4. Why "a shared database" means you built a distributed monolith.
+5. When you'd write a saga, and when you'd move the boundary instead.
+
 ---
 
-## 8. Interview traps
+## 9. Production rules
+
+| Do / Never | Why |
+|---|---|
+| **Start from a modular monolith and extract along boundaries you already have** | If you can't draw clean boundaries inside one codebase, distributing them just converts method calls into unreliable network calls and keeps the coupling |
+| **Never split because the monolith is messy** | Distribution doesn't make bad boundaries good; it makes them expensive and much harder to move later |
+| **Give every service its own data** | A shared database is the definitive distributed monolith — the schema is still a breakable contract between everyone who touches it |
+| **Keep anything that must change atomically in one service** | That is the aggregate rule applied to boundaries, and it's the single strongest signal you have |
+| **Prefer redrawing a boundary over writing a saga** | Most sagas exist because the boundary was wrong, and compensation is strictly harder than the transaction it replaced |
+| **Use orchestration for sagas by default** | The business process stays explicit and debuggable; choreography is for simple, maximally decoupled flows |
+| **Reach for a durable workflow engine past about three steps** | The happy path is easy — what happens when the orchestrator crashes halfway is the whole problem, and it's already solved |
+| **Use sync for queries, async for state propagation** | A chain of four synchronous hops is 96% availability and the sum of the latencies; a queue absorbs the failure instead |
+| **Never make a service-to-service call without a timeout, breaker and bulkhead** | It is the mechanism by which one service's slowness becomes a cluster-wide outage |
+| **Use Kubernetes Services rather than Eureka on Kubernetes** | The platform already provides discovery, load balancing and health checking; Eureka solved a pre-Kubernetes problem |
+| **Choose gRPC for high-volume internal traffic, REST at the edge** | Binary payloads and a generated contract win internally; browsers, curl and third parties win at the boundary |
+| **State CAP correctly: partitions aren't optional** | "Pick two of three" is the common misstatement — you choose C or A *during* a partition, and latency vs consistency the rest of the time |
+| **Say where an eventual-consistency trade-off breaks** | Seconds-stale is obviously fine for an uptime dashboard and obviously wrong for an account balance; naming the line is what makes the answer credible |
+| **Migrate with the strangler fig, never a big-bang rewrite** | Every step stays deployable and revertible, and you learn the real boundaries from production traffic instead of a whiteboard |
+
+---
+
+## 10. Interview traps
 
 **Q1. Would you use microservices for a new project?** *(the most likely question)*
 No, by default. I'd start with a modular monolith: feature packages with enforced boundaries (ArchUnit), no cross-feature shared tables, communication via public service interfaces or domain events. Then extract a service for a concrete reason — a genuinely different scaling profile, a team needing independent deploys, or an isolation requirement — along a boundary that already exists. Microservices solve an *organizational* scaling problem; a small team pays the full distributed-systems cost for a benefit it can't collect.
@@ -484,7 +521,7 @@ The gateway validates the JWT and either forwards it or mints a short-lived inte
 
 ---
 
-## 9. Retention check
+## 11. Retention check
 
 1. Give the two genuine benefits of microservices, and say which is organizational.
 2. Why is a shared database strictly worse than either a monolith or true microservices?

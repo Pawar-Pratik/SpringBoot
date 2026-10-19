@@ -6,7 +6,15 @@
 
 ---
 
-## 1. Why messaging at all
+## 1. The idea in one sentence
+
+> **Kafka is not a queue, it's a replicated append-only log — messages are retained rather than consumed, ordering exists only within a partition, and every consumer group reads everything; almost every Kafka question is a consequence of those three facts.**
+
+The second half of the lesson follows from one more: you cannot make a database transaction and a publish atomic. That is why the outbox exists, why delivery is at-least-once, and why every consumer must be idempotent.
+
+---
+
+## 2. Why messaging at all
 
 ```
 SYNCHRONOUS                              ASYNCHRONOUS
@@ -40,7 +48,7 @@ api ──HTTP──▶ notifier                   api ──▶ [topic] ──�
 
 ---
 
-## 2. Kafka's model
+## 3. Kafka's model
 
 ```
 TOPIC "check.results" (retention: 7 days)
@@ -96,7 +104,7 @@ Topic with 3 partitions, consumer group "notifier":
 
 ---
 
-## 3. Producing
+## 4. Producing
 
 ```yaml
 spring:
@@ -169,7 +177,7 @@ kafkaTemplate.send(...).get(5, TimeUnit.SECONDS);           // ⚠️ blocking �
 
 ---
 
-## 4. Kafka and transactions — the dual-write problem
+## 5. Kafka and transactions — the dual-write problem
 
 ```java
 // ❌ THE CLASSIC BUG
@@ -242,7 +250,7 @@ public void processAndForward(ConsumerRecord<String, Event> record) {
 
 ---
 
-## 5. Consuming
+## 6. Consuming
 
 ```yaml
 spring:
@@ -353,7 +361,7 @@ spring.kafka.listener.concurrency: 3      # 3 consumer threads in this instance
 
 ---
 
-## 6. Delivery semantics — be precise here
+## 7. Delivery semantics — be precise here
 
 | Guarantee | How | Trade-off |
 |---|---|---|
@@ -403,7 +411,7 @@ ON CONFLICT (monitor_id, checked_at) DO NOTHING;      -- ★ the database enforc
 
 ---
 
-## 7. Schema evolution
+## 8. Schema evolution
 
 **Producers and consumers deploy independently, so an old consumer will receive new messages and vice versa.**
 
@@ -446,7 +454,7 @@ record CheckResultEvent(UUID monitorId, String state, long durationMs) {}
 
 ---
 
-## 8. Kafka vs RabbitMQ vs SQS — have an opinion
+## 9. Kafka vs RabbitMQ vs SQS — have an opinion
 
 | | **Kafka** | **RabbitMQ** | **SQS** |
 |---|---|---|---|
@@ -472,7 +480,7 @@ record CheckResultEvent(UUID monitorId, String state, long durationMs) {}
 
 ---
 
-## 9. Build this — Vigil's event pipeline
+## 10. Build & break — Vigil's event pipeline
 
 **1. Kafka locally with KRaft (no ZooKeeper):**
 ```yaml
@@ -528,9 +536,39 @@ notification.requests 3 partitions
 
 **14. Test it.** Testcontainers with `KafkaContainer`, plus `@EmbeddedKafka` for lighter tests. Assert: a produced message lands on the right topic and partition, a consumer processes it, a poison message reaches the DLT, and a duplicate produces one row.
 
+### Explain out loud (60s)
+
+1. Why "Kafka is a log, not a queue" explains retention, replay and consumer groups.
+2. How keying gives you ordering and parallelism at the same time.
+3. The dual-write problem, and the two real solutions.
+4. The poison-pill incident: what happens, and the full fix including replay.
+5. Exactly-once, stated precisely, including what Kafka transactions don't cover.
+
 ---
 
-## 10. Interview traps
+## 11. Production rules
+
+| Do / Never | Why |
+|---|---|
+| **Key messages by the entity whose ordering matters** | Same key means same partition means ordered — and you still get parallelism across keys, which is the whole design trick |
+| **Over-provision partitions modestly at design time** | Partition count caps consumer parallelism, you can't reduce it, and increasing it remaps keys and breaks ordering across the change |
+| **Use `acks=all` with `min.insync.replicas ≥ 2`** | `acks=1` loses messages exactly when a broker fails, which is precisely when you care |
+| **Set `enable.idempotence=true` explicitly** | It's the modern default, but stating it documents intent and protects you when configuration elsewhere turns it off |
+| **Never block on a send in a request path** | Use the callback; if you truly need "published before I respond", you need the outbox, not a synchronous send |
+| **Use an outbox (or Debezium CDC) when a message must not be lost** | Writing the row and the message in one transaction is the only way to make "it happened" and "it will be sent" atomic |
+| **Set `enable-auto-commit=false` and acknowledge after processing** | Auto-commit advances the offset on a timer regardless of success, which gives you non-deterministic message loss |
+| **Give every consumer a dead-letter topic** | Kafka can't skip ahead, so one poison pill halts its partition indefinitely — the most common Kafka production incident |
+| **Classify exceptions and don't retry what can't succeed** | A `SerializationException` will fail identically three times; retrying it just delays the DLT and burns capacity |
+| **Build a DLT replay tool** | A dead-letter topic nobody consumes is a data-loss log with extra steps — the point is to fix the bug and reprocess |
+| **Enable the cooperative sticky assignor** | Rebalances then pause only the affected partitions instead of stopping all consumption during every rolling deploy |
+| **Watch `max.poll.interval.ms` against your batch processing time** | Exceed it and Kafka rebalances while you're still working, so the commit fails and another consumer redoes the batch |
+| **Say "exactly-once *processing*", never "exactly-once delivery"** | Delivery can't be exactly-once in a distributed system; at-least-once plus an idempotent consumer is the achievable thing |
+| **Write the dedupe record in the same transaction as the business change** | Otherwise you apply the change, crash before recording it, and apply it again — the outbox insight from the consumer's side |
+| **Prefer natural idempotency to a dedupe table** | A unique constraint with `ON CONFLICT DO NOTHING` can't be forgotten and costs no extra query |
+
+---
+
+## 12. Interview traps
 
 **Q1. What is Kafka and how does it differ from a queue?**
 A distributed, replicated, append-only log. Messages are **retained** rather than removed on consumption, and each consumer group tracks its own offset — so many groups read the same data independently and any group can **replay** by resetting its offset. Ordering is guaranteed within a partition only.
@@ -576,7 +614,7 @@ Kafka for high-volume event streams needing replay and multiple independent cons
 
 ---
 
-## 11. Retention check
+## 13. Retention check
 
 1. Why is Kafka a log rather than a queue, and name two capabilities that follow from it.
 2. What happens to ordering if you increase a topic's partition count?
