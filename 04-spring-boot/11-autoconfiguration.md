@@ -6,7 +6,15 @@
 
 ---
 
-## 1. Decompose `@SpringBootApplication`
+## 1. The idea in one sentence
+
+> **Auto-configuration is `@Conditional` applied with discipline: a starter ships no code at all — it only puts classes on the classpath so that "if this library is present and you haven't configured it yourself, here is a sensible default" becomes true.**
+
+The second half matters as much as the first. The import selector is *deferred*, so it runs after every bean of yours is registered — which is the only reason `@ConditionalOnMissingBean` can reliably mean "the user didn't define one."
+
+---
+
+## 2. Decompose `@SpringBootApplication`
 
 ```java
 @SpringBootApplication
@@ -44,7 +52,7 @@ public @interface EnableAutoConfiguration { }
 
 ---
 
-## 2. What `AutoConfigurationImportSelector` does
+## 3. What `AutoConfigurationImportSelector` does
 
 It's a `DeferredImportSelector` — "deferred" meaning **it runs last**, after all your own configuration classes are processed. That ordering is what makes `@ConditionalOnMissingBean` work (Lesson 08 §3).
 
@@ -78,7 +86,7 @@ Its algorithm:
 
 ---
 
-## 3. Read a real auto-configuration class
+## 4. Read a real auto-configuration class
 
 Here's a faithful sketch of `DataSourceAutoConfiguration`, which is representative of all of them:
 
@@ -133,7 +141,7 @@ That's Spring Boot. Not magic — a very disciplined application of `@Conditiona
 
 ---
 
-## 4. Debugging auto-configuration — the skills that matter
+## 5. Debugging auto-configuration — the skills that matter
 
 This is the practical payoff. **When a senior engineer sees unexpected Spring behaviour, they run these. Learn them now.**
 
@@ -210,7 +218,7 @@ Common real reasons: you manage a `DataSource` yourself; you're writing a non-we
 
 ---
 
-## 5. Starters — what's actually in one
+## 6. Starters — what's actually in one
 
 Open `spring-boot-starter-web`'s POM and you find… **no code**. A starter is a POM with dependencies and nothing else:
 
@@ -254,7 +262,7 @@ Reversing this is considered impolite because it implies official status. Interv
 
 ---
 
-## 6. Build your own starter
+## 7. Build your own starter
 
 **This is the exercise that separates you from the pack.** Most Spring developers have never written a starter, and it's the clearest possible demonstration that you understand the mechanism.
 
@@ -365,7 +373,7 @@ Consumers just add the dependency and set properties. And if they define their o
 
 ---
 
-## 7. Anti-patterns and cautions
+## 8. Anti-patterns and cautions
 
 **❌ Fighting auto-configuration instead of understanding it.** Symptom: a config class full of `@Bean` overrides copied from Stack Overflow. Fix: read the negative-matches report and find out *why* the default didn't apply.
 
@@ -379,7 +387,7 @@ Consumers just add the dependency and set properties. And if they define their o
 
 ---
 
-## 8. Build this
+## 9. Build & break
 
 **1. Read your own condition report.** `debug=true`, restart, and answer in writing:
 - How many positive matches? Negative?
@@ -401,9 +409,34 @@ Consumers just add the dependency and set properties. And if they define their o
 
 **5. Find the imports file.** In `~/.m2/repository/org/springframework/boot/spring-boot-autoconfigure/<version>/`, open the JAR and read `META-INF/spring/org.springframework.boot.autoconfigure.AutoConfiguration.imports`. Count the lines. **That plain text file is Spring Boot's entire registry.** Seeing it makes the whole thing feel small and knowable — which is the point of this lesson.
 
+### Explain out loud (60s)
+
+1. What `@SpringBootApplication` decomposes into, and which part does the work.
+2. What a starter actually contains, and how something with no code changes your app.
+3. Why the import selector is deferred, and what depends on that ordering.
+4. The four-annotation pattern every auto-configuration class follows.
+5. The first two commands you run when a bean you expected isn't there.
+
 ---
 
-## 9. Interview traps
+## 10. Production rules
+
+| Do / Never | Why |
+|---|---|
+| **Read the "Negative matches" section of `debug=true` before theorising** | It names the exact missing class or bean that stopped an auto-configuration, turning a 40-minute mystery into a 20-second lookup |
+| **Use `/actuator/beans`' `resource` field to answer "where did this bean come from?"** | It names the configuration class that created it, which no amount of grepping your own code will tell you |
+| **Exclude an auto-configuration deliberately, never habitually** | Excluding one because you own that concern is fine; excluding several means a dependency dragged in a whole stack you didn't want |
+| **Name a third-party starter `*-spring-boot-starter`** | `spring-boot-starter-*` is reserved for the Spring team, and taking it makes your artifact look official when it isn't |
+| **Put `@ConditionalOnMissingBean` on every bean a starter contributes** | It is what makes your defaults overridable, which is the entire contract users expect from a starter |
+| **Register auto-configurations in `AutoConfiguration.imports`, never `spring.factories`** | Boot 3 removed `spring.factories` support for auto-configuration outright — a tutorial using it predates 2022 |
+| **Declare auto-config classes with `@AutoConfiguration` and `proxyBeanMethods = false`** | Skipping CGLIB generation across hundreds of config classes is measurable startup time, and parameters make it safe |
+| **Bind starter settings with `@ConfigurationProperties` under your own namespace** | It gives users typed, validated, documented config that shows up in `/actuator/configprops` instead of scattered `@Value` strings |
+| **Never put business beans in an auto-configuration** | Auto-config is for infrastructure defaults; business logic that appears conditionally is behaviour nobody can trace |
+| **Keep the `@SpringBootApplication` class in the root package** | `@SpringBootTest` searches up the package tree for `@SpringBootConfiguration`, so a misplaced main class breaks tests in a confusing way |
+
+---
+
+## 11. Interview traps
 
 **Q1. How does auto-configuration work?** *(Give the full chain — this is the flagship answer.)*
 `@SpringBootApplication` includes `@EnableAutoConfiguration`, which `@Import`s `AutoConfigurationImportSelector` — a `DeferredImportSelector`, so it runs after all user configuration. It reads `META-INF/spring/…AutoConfiguration.imports` from every JAR on the classpath (~150 candidates), pre-filters them using a metadata index without loading classes, applies exclusions, sorts by `@AutoConfigureBefore/After`, and imports the survivors. Each imported class's `@Conditional` annotations then decide which beans are actually created — typically `@ConditionalOnClass` ("is the library present?") plus `@ConditionalOnMissingBean` ("did the user define their own?").
@@ -437,7 +470,7 @@ Ordering plus `@ConditionalOnMissingBean` resolves it: they're sorted, the first
 
 ---
 
-## 10. Retention check
+## 12. Retention check
 
 1. Trace, step by step, how adding `spring-boot-starter-data-jpa` results in an `EntityManagerFactory` bean.
 2. Why would `@ConditionalOnMissingBean` be broken if the import selector weren't deferred?

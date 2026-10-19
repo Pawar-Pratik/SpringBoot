@@ -6,7 +6,15 @@
 
 ---
 
-## 1. Layered architecture — the baseline everyone must know
+## 1. The idea in one sentence
+
+> **Structure is only real when the compiler enforces it: package-by-feature plus package-private classes gives you module boundaries Java will defend, while package-by-layer gives you a diagram with nothing behind it.**
+
+Everything else here is a judgement about how much enforcement a given feature is worth — package-private inside a feature for most code, Maven modules when a dependency rule must be unbreakable, hexagonal only where the business rules are rich enough to repay the mapping cost.
+
+---
+
+## 2. Layered architecture — the baseline everyone must know
 
 ```
 ┌───────────────────────────────────────────────────────────┐
@@ -57,7 +65,7 @@ The test I use: **could a scheduled job, a Kafka consumer, and an HTTP request a
 
 ---
 
-## 2. Package-by-layer vs package-by-feature
+## 3. Package-by-layer vs package-by-feature
 
 ### Package-by-layer (what tutorials teach)
 
@@ -164,7 +172,7 @@ Package-by-layer is fine for a small app (< ~20 classes) and it's what most tuto
 
 ---
 
-## 3. Hexagonal / ports-and-adapters (know it, apply it selectively)
+## 4. Hexagonal / ports-and-adapters (know it, apply it selectively)
 
 For domain-heavy systems, the ambition is that **the domain has zero framework dependencies**:
 
@@ -227,7 +235,7 @@ Interviewers hear "clean architecture always" a lot. A calibrated answer with a 
 
 ---
 
-## 4. Multi-module Maven — the pre-microservice step
+## 5. Multi-module Maven — the pre-microservice step
 
 When a monolith gets large, split it into Maven modules to make dependency rules **compiler-enforced**:
 
@@ -282,7 +290,7 @@ void controllersMustNotTouchRepositories() {
 
 ---
 
-## 5. Naming conventions that signal experience
+## 6. Naming conventions that signal experience
 
 | Element | Convention | Avoid |
 |---|---|---|
@@ -305,7 +313,7 @@ void controllersMustNotTouchRepositories() {
 
 ---
 
-## 6. The `config` package — what belongs there
+## 7. The `config` package — what belongs there
 
 **Belongs:**
 ```
@@ -325,7 +333,7 @@ config/
 
 ---
 
-## 7. Test structure — mirror the source, exactly
+## 8. Test structure — mirror the source, exactly
 
 ```
 src/test/java/com/vigil/
@@ -349,7 +357,7 @@ src/test/java/com/vigil/
 
 ---
 
-## 8. Vigil's actual structure
+## 9. Vigil's actual structure
 
 This is what you'll build, and it's designed so the eventual microservice split falls out of the existing packages:
 
@@ -379,7 +387,7 @@ com.vigil
 
 ---
 
-## 9. Build this
+## 10. Build & break
 
 **1. Restructure your project.** Create the Vigil package skeleton from §8 (empty packages with a `package-info.java` are fine). Move your playground classes into `playground/` so they don't pollute it.
 
@@ -433,9 +441,34 @@ void layerDependenciesAreRespected() {
 
 **5. Write a one-page `ARCHITECTURE.md`.** Package structure, the dependency rule, why `check` is separate from `monitor`, and what you'd extract first if you needed to scale. **Interviewers read this file.** Having one is unusual; having a good one is memorable.
 
+### Explain out loud (60s)
+
+1. Why package-by-feature beats package-by-layer, in terms of what the compiler enforces.
+2. The three layering rules, and the specific failure each prevents.
+3. The "three entry points" test, and a use case that fails it.
+4. What hexagonal buys you, what it costs, and where you'd actually apply it.
+5. When you'd escalate from package-private to a separate Maven module.
+
 ---
 
-## 10. Interview traps
+## 11. Production rules
+
+| Do / Never | Why |
+|---|---|
+| **Organize by feature, not by layer** | Layer packages force every class `public`, so you get layers on a diagram and no boundary the compiler will defend |
+| **Make repositories and entities package-private inside their feature** | It is a free, compiler-enforced module boundary that stops another feature querying your tables directly |
+| **Put `@Transactional` on the service layer only** | On a controller it would span HTTP concerns; on a repository every method is its own transaction, so two writes can never be atomic |
+| **Never call a repository from a controller** | Business logic then lives where only HTTP can reach it — a scheduled job or a Kafka consumer has to duplicate it |
+| **Never return a JPA entity from a controller** | It leaks your schema into your API contract, turns a column rename into a breaking change, and invites lazy-loading serialization explosions |
+| **Apply the "three entry points" test to every use case** | If an HTTP request, a scheduled job and a message consumer can't all trigger it without duplication, the logic sits in the wrong layer |
+| **Apply hexagonal selectively, never dogmatically** | Two models and a mapper per aggregate is real ongoing cost — worth it for rich domain rules, pure ceremony for four-column CRUD |
+| **Reach for Maven modules when a dependency rule must be unbreakable** | Module boundaries fail the build; a convention in a wiki fails silently over the following year |
+| **Match an existing codebase's structure rather than unilaterally improving it** | Consistency beats being right in isolation, and a half-migrated layout is worse than either one done consistently |
+| **Mirror the source tree exactly in `src/test/java`** | It keeps package-private tests possible and makes the missing test for a class obvious at a glance |
+
+---
+
+## 12. Interview traps
 
 **Q1. How do you structure a Spring Boot project?**
 Package-by-feature, not package-by-layer: each feature owns its controller, service, repository, entity and DTOs. That gives cohesion and lets me make repositories and entities **package-private**, so the compiler enforces that other features go through the public service API. Package-by-layer forces everything public, so you have layers on paper but no real boundaries. `common` and `config` hold genuinely shared infrastructure with no feature knowledge.
@@ -469,7 +502,7 @@ Feature packages with explicit, enforced boundaries; communication between featu
 
 ---
 
-## 11. Retention check
+## 13. Retention check
 
 1. Give the strongest argument for package-by-feature — the one about the compiler.
 2. Why not `@Transactional` on a controller? Why not on a repository?

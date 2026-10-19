@@ -6,7 +6,15 @@
 
 ---
 
-## 1. The 12-Factor principle behind all of this
+## 1. The idea in one sentence
+
+> **One build artifact must run in every environment, differing only in what the environment hands it — so config is everything that varies between deployments, and the test of whether you've got it right is whether you could open-source the repository today without leaking a single credential.**
+
+Both halves of this lesson fall out of that. Precedence exists so the deployment can override the jar; profiles are dangerous precisely when they make environments run *different code* instead of the same code with different values.
+
+---
+
+## 2. The 12-Factor principle behind all of this
 
 > **Config is everything that varies between deployments.** It must live in the *environment*, not the code.
 
@@ -16,7 +24,7 @@ This isn't dogma — it's what makes one build artifact promotable. The exact `v
 
 ---
 
-## 2. Property sources and precedence
+## 3. Property sources and precedence
 
 Spring's `Environment` merges many sources into one lookup. **Precedence, highest wins** (this is the memorizable list):
 
@@ -77,7 +85,7 @@ VIGIL_LIMITS_FREE=10                     # → vigil.limits.free  (a Map<String,
 
 ---
 
-## 3. `application.yml` — structure and the multi-document trick
+## 4. `application.yml` — structure and the multi-document trick
 
 YAML vs properties is mostly taste. YAML wins for nesting and lists; properties wins for being un-breakable by whitespace. Most teams use YAML.
 
@@ -187,7 +195,7 @@ spring:
 
 ---
 
-## 4. Reading config: `@Value` vs `@ConfigurationProperties`
+## 5. Reading config: `@Value` vs `@ConfigurationProperties`
 
 ### `@Value` — for one-off scalars
 
@@ -281,7 +289,7 @@ Records (and constructor binding generally) are immutable and require all values
 
 ---
 
-## 5. Profiles
+## 6. Profiles
 
 ```bash
 --spring.profiles.active=prod
@@ -340,7 +348,7 @@ vigil:
 
 ---
 
-## 6. Secrets — the part that gets people fired
+## 7. Secrets — the part that gets people fired
 
 ### Never do this
 
@@ -395,7 +403,7 @@ That last item is worth doing for real. A pre-commit secret scanner has saved a 
 
 ---
 
-## 7. Spring Cloud Config — centralized configuration (know the concept)
+## 8. Spring Cloud Config — centralized configuration (know the concept)
 
 With 30 microservices, "change the log level everywhere" becomes a deployment project. A **config server** centralizes it:
 
@@ -424,7 +432,7 @@ spring:
 
 ---
 
-## 8. Build this
+## 9. Build & break
 
 **1. Prove the precedence order.** Set `vigil.demo.value` in four places at once and predict the winner before checking:
 ```yaml
@@ -457,9 +465,37 @@ Expose it via an endpoint or log it at startup. Remove the CLI arg → env wins.
 
 **7. Inspect `/actuator/configprops` and `/actuator/env`.** Find `vigil.checks` and note the property **source** for each value. When someone says "the config isn't taking effect," this endpoint is your answer.
 
+### Explain out loud (60s)
+
+1. Why one artifact must run everywhere, and what that implies about config.
+2. The precedence order, compressed into two rules.
+3. Four reasons `@ConfigurationProperties` beats `@Value`.
+4. The profiles-vs-properties rule, in one sentence.
+5. The secrets progression from committed plaintext to no long-lived secret at all.
+
 ---
 
-## 9. Interview traps
+## 10. Production rules
+
+| Do / Never | Why |
+|---|---|
+| **Remember precedence as two rules: more specific wins, and closer to the deployment wins** | Command-line > env var > profile file > base file, and outside the jar beats inside — that pair reconstructs the whole table |
+| **Prefer `@ConfigurationProperties` over `@Value`** | It gives you typed binding, relaxed binding, `@Validated` startup failure, nested structure and a `/actuator/configprops` entry; `@Value` gives you a string |
+| **Never rely on relaxed binding with `@Value`** | Relaxed binding is a `@ConfigurationProperties` feature — `@Value("${vigil.webhookUrl}")` needs the key spelled exactly that way |
+| **Use `@Validated` with `@Min`/`@NotEmpty` on your properties** | It converts a typo'd or missing value into a startup failure with a precise message, instead of a wrong value discovered in production |
+| **Never commit a secret, even briefly** | Git history is permanent across every clone and fork, scanners crawl public pushes within minutes, and the only real fix is rotation |
+| **Reference secrets as `${DB_PASSWORD}` with no default** | A missing value then fails loudly at startup rather than silently starting with an empty password |
+| **Prefer mounted secret files (`configtree:`) over environment variables** | File permissions apply, and files don't leak into `/proc/<pid>/environ`, `docker inspect`, crash dumps or child processes |
+| **Say "rotation" when you say "secret manager"** | Central storage without rotation only moves the secret; short-lived dynamic credentials are what actually shrinks the blast radius |
+| **Never let a profile change business logic** | The production path then becomes the one you never test, and "it worked in staging" stops meaning anything |
+| **Use a profile when the *number of beans* differs, a property when only a *value* differs** | That one line decides every profiles-vs-properties argument you'll have in a code review |
+| **Set the active profile from the environment, never in a committed `application.yml`** | A hardcoded `prod` in a committed file has caused real incidents, and any environment value silently overrides it anyway |
+| **Remember that no active profile means the `default` profile is active** | `@Profile("default")` beans load when you meant "always", which is a surprising way to get an extra bean in production |
+| **Run a secret scanner (`gitleaks`) as a pre-commit hook** | It is the only control in this table that catches the mistake *before* it becomes permanent |
+
+---
+
+## 11. Interview traps
 
 **Q1. What's the property precedence order?**
 Command-line args > `SPRING_APPLICATION_JSON` > system properties > OS env vars > profile-specific outside the JAR > profile-specific inside > `application.yml` outside > inside > `@PropertySource` > defaults. Two rules explain it: more specific wins, closer to the deployment wins.
@@ -496,7 +532,7 @@ Records for immutable constructor binding (the modern default) with `@DefaultVal
 
 ---
 
-## 10. Retention check
+## 12. Retention check
 
 1. State the top four levels of the precedence order.
 2. Give the exact env-var spelling for `vigil.notification.slack.webhook-url`.
