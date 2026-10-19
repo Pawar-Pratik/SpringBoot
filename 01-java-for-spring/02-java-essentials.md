@@ -6,7 +6,15 @@
 
 ---
 
-## 1. The shape of a Java file
+## 1. The idea in one sentence
+
+> **A Spring bean is one object shared by every concurrent request, so the Java choices that look like style — `final` fields, immutable values, correct equality, explicit absence — are the ones that decide whether your service is correct under load.**
+
+Read the rest of this lesson through that lens. Primitives vs wrappers, `BigDecimal`, `java.time`, records, enums and the `equals`/`hashCode` contract all turn out to be the same question asked in different places: *can two threads, or two rows, disagree about what this value is?*
+
+---
+
+## 2. The shape of a Java file
 
 ```java
 package com.vigil.monitor;                    // 1. must match the folder path
@@ -47,7 +55,7 @@ Conventions that are *universal* (violating them marks you as an outsider):
 
 ---
 
-## 2. Types, and the reference/primitive split
+## 3. Types, and the reference/primitive split
 
 Java is **statically and strongly typed**. Every variable's type is fixed at compile time.
 
@@ -132,7 +140,7 @@ Period   p       = Period.ofMonths(1);            // human time span (calendar-a
 
 ---
 
-## 3. Classes, interfaces, and why Spring cares so much about interfaces
+## 4. Classes, interfaces, and why Spring cares so much about interfaces
 
 ### `final`, `static`, and access modifiers
 
@@ -257,7 +265,7 @@ Java enums can hold state, implement interfaces, and have methods. Use them for 
 
 ---
 
-## 4. Collections — the 5 you need
+## 5. Collections — the 5 you need
 
 ```java
 List<Monitor>          list = new ArrayList<>();       // ordered, duplicates OK, index access
@@ -309,7 +317,7 @@ public class Monitor {
 
 ---
 
-## 5. Exceptions — and Spring's strong opinion about them
+## 6. Exceptions — and Spring's strong opinion about them
 
 ```java
 // CHECKED — extends Exception. Compiler forces you to catch or declare.
@@ -362,7 +370,7 @@ Also: **never use exceptions for control flow.** `catch (NotFoundException e) { 
 
 ---
 
-## 6. `null` — Java's original sin, and how Spring copes
+## 7. `null` — Java's original sin, and how Spring copes
 
 Tony Hoare, who invented the null reference in 1965, called it his "billion-dollar mistake." He was being conservative.
 
@@ -391,7 +399,7 @@ if (status.equals("UP"))                 // ❌ NPE if status is null
 
 ---
 
-## 7. Threads: the minimum you must know now
+## 8. Threads: the minimum you must know now
 
 You will not write `new Thread()` in Spring. But you *must* understand this, because it determines correctness:
 
@@ -434,7 +442,7 @@ Lesson 32 and 36 go deeper — including virtual threads, which change the econo
 
 ---
 
-## 8. Build this
+## 9. Build & break
 
 In your `vigil` project, create `src/main/java/com/vigil/playground/` and write real code. Don't skip this — typing it is the point.
 
@@ -469,9 +477,36 @@ List<String> immutable = List.of("a");  immutable.add("b"); // read this excepti
 ```
 Predict each result *before* running. Wrong predictions are the valuable ones.
 
+### Explain out loud (60s)
+
+1. Why a `private String currentUser` field on a `@Service` is a data-leak bug, not a style issue.
+2. `==` vs `.equals()`, and why the `Integer` cache makes the mistake intermittent.
+3. The `equals`/`hashCode` contract, and the exact failure it prevents.
+4. Checked vs unchecked, and the two reasons Spring chose unchecked.
+5. Why a record can't be a JPA entity — two concrete reasons.
+
 ---
 
-## 9. Interview traps
+## 10. Production rules
+
+| Do / Never | Why |
+|---|---|
+| **A Spring bean holds `final` dependencies and nothing else** | Tomcat runs ~200 threads through the same instance; a mutable field is cross-request data leakage that only appears under load |
+| **Never keep `static` mutable state** | It is shared by every request *and* every thread in the JVM — the same bug with a wider blast radius and no obvious owner |
+| **Request-specific data lives in parameters and locals** | The thread's own stack is the only storage that is free, correct and automatically per-request |
+| **Wrapper types (`Integer`, `Long`) for nullable columns, primitives for everything else** | A primitive cannot express "not set", so a NULL column silently becomes `0` — a wrong number is worse than a missing one |
+| **`==` only for primitives and enums; `.equals()` for everything else** | The `Integer` cache makes `==` work for −128..127 and fail above it, so the bug is intermittent rather than obvious |
+| **`BigDecimal` for money, constructed from a `String`, compared with `compareTo`** | `new BigDecimal(0.1)` inherits the double's error, and `equals` says `2.0 ≠ 2.00` because it compares scale |
+| **Store `Instant`; convert to a zone only at the presentation edge** | `LocalDateTime` carries no zone, so it is ambiguous across servers and silently wrong across DST |
+| **Never write new code against `Date`, `Calendar` or `SimpleDateFormat`** | `SimpleDateFormat` is mutable and not thread-safe; shared as a `static` field it corrupts dates intermittently |
+| **Override `equals` and `hashCode` together, over a field that never changes** | Hash collections locate by hash first — mutate a hashed field and `set.contains(obj)` returns false for an object inside the set |
+| **Records for DTOs and value objects; never for JPA entities** | Records give you immutability and equality free, but JPA needs a non-final class, a no-arg constructor and mutable fields |
+| **Always keep the cause when rethrowing; never `catch (Exception e) {}`** | A swallowed exception turns a one-line fix into an outage with no evidence |
+| **Declare variables as the interface (`List`, not `ArrayList`)** | It keeps the implementation swappable and matches the style of every Spring API you'll call |
+
+---
+
+## 11. Interview traps
 
 **Q1. Why should Spring beans be stateless?**
 Beans are singletons by default; every concurrent request shares the instance. Mutable instance fields become shared mutable state across Tomcat's thread pool → race conditions and cross-request data leakage. Keep dependencies `final` and request data in locals/parameters.
@@ -502,7 +537,7 @@ Mutable and not thread-safe. Shared as a `static` field in a web app, concurrent
 
 ---
 
-## 10. Retention check
+## 12. Retention check
 
 1. Why does `List<int>` not compile, and what do you write instead?
 2. You have a Spring `@Service` with a `private String currentUserEmail` field set at the top of each method. What exactly goes wrong, and under what conditions?

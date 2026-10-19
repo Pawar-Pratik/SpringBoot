@@ -6,7 +6,15 @@
 
 ---
 
-## 1. The mental model: Java's execution pipeline
+## 1. The idea in one sentence
+
+> **Java resolves almost nothing at compile time that matters to Spring: your dependencies are found by name, at runtime, from an ordered search path — so most "Spring Boot won't start" failures are the classpath answering a lookup with the wrong class, or with no class at all.**
+
+Everything in this lesson is a consequence of that sentence. The JIT, the fat JAR's custom classloader, Maven's nearest-wins rule and Boot's BOM all exist because name resolution happens late, and late resolution is only safe if something curates what's on the path.
+
+---
+
+## 2. The mental model: Java's execution pipeline
 
 Coming from Python/JS, the biggest shift is that Java has a **compile step** and runs on a **virtual machine**.
 
@@ -44,7 +52,7 @@ Hold this thought. It explains the *entire* character of Spring development.
 
 ---
 
-## 2. The classpath — the single most important runtime concept
+## 3. The classpath — the single most important runtime concept
 
 The **classpath** is the list of places the JVM searches for classes. That's it. It's a search path, like `PATH` for executables or `sys.path` in Python.
 
@@ -70,7 +78,7 @@ When your code says `new ObjectMapper()`, the JVM asks the ClassLoader: *"find `
 
 ---
 
-## 3. JAR, fat JAR, and how Spring Boot runs
+## 4. JAR, fat JAR, and how Spring Boot runs
 
 A **JAR** is a ZIP file with a manifest. Genuinely — rename `app.jar` to `app.zip` and open it.
 
@@ -105,7 +113,7 @@ One command. No app server to install. No classpath script. This is the thing th
 
 ---
 
-## 4. Maven: the build tool you'll use
+## 5. Maven: the build tool you'll use
 
 Java's ecosystem has two build tools. You'll learn Maven, because ~70% of enterprise Spring codebases use it and it's declarative enough that you can *read* any project instantly.
 
@@ -205,7 +213,7 @@ Running a phase runs **everything before it**. So `mvn package` compiles and tes
 
 ---
 
-## 5. Transitive dependencies & conflict resolution
+## 6. Transitive dependencies & conflict resolution
 
 You declare `spring-boot-starter-web`. You get ~35 JARs. Because dependencies have dependencies — **transitively**.
 
@@ -263,7 +271,7 @@ Then either:
 
 ---
 
-## 6. `mvnw`, `.m2` and where JARs actually live
+## 7. `mvnw`, `.m2` and where JARs actually live
 
 ```
 ~/.m2/
@@ -283,7 +291,7 @@ In companies, `settings.xml` points at an internal **Nexus/Artifactory** mirror.
 
 ---
 
-## 7. Build this: your first Spring Boot project
+## 8. Build & break: your first Spring Boot project
 
 We'll create the skeleton that becomes Vigil.
 
@@ -374,9 +382,33 @@ Add this to `pom.xml` and rebuild:
 
 Run the app and hit an endpoint that returns JSON. Read the exception. You just manufactured a version conflict — "nearest wins" chose your ancient 2.9.0 over Boot's curated version. **Remove it afterward.** You now have a real, felt understanding of why the BOM exists.
 
+### Explain out loud (60s)
+
+1. The two compilation steps in a Java program's life, and who performs each.
+2. What the classpath is, in one sentence, and why first-match-wins makes duplicate classes dangerous.
+3. `ClassNotFoundException` vs `NoClassDefFoundError` vs `NoSuchMethodError` — the discriminator for each.
+4. Why the JVM can't load a JAR inside a JAR, and what Boot does about it.
+5. Maven's conflict rule, and why it can hand you an *older* library than you asked for.
+
 ---
 
-## 8. Interview traps
+## 9. Production rules
+
+| Do / Never | Why |
+|---|---|
+| **Always `./mvnw`, never `mvn`** | The wrapper pins the exact Maven version in the repo, so your machine and CI produce the same build instead of "works on mine" |
+| **Never write a `<version>` on a Boot-managed dependency** | The BOM already pins a tested-compatible version; a hand-written one silently un-pins that library from the curated set |
+| **Override a managed version via the property (`<jackson.version>`), not by re-declaring the dependency** | The property moves every artifact in that group together; re-declaring moves one and leaves its siblings behind — which is exactly how `NoSuchMethodError` is born |
+| **JDBC drivers get `runtime` scope** | Keeping driver classes off the compile classpath makes it impossible to `import org.postgresql.*` in business code — the build tool enforces the abstraction |
+| **Run `dependency:tree` before theorising about a version error** | Nearest-definition-wins means the answer is always visible in the tree; guessing costs hours, reading it costs a minute |
+| **Fix conflicts by declaring at depth 1 or excluding the bad path** | Maven resolves by *depth*, not by highest version, so a direct declaration is the only reliable way to win |
+| **Never `mvn install` in CI** | It writes to a shared local repository, making builds order-dependent and letting a stale artifact pass a build that should fail; use `package` or `verify` |
+| **On `NoClassDefFoundError`, scan earlier log lines before adding a dependency** | It also fires when a class *was* found but its static initializer threw — the real exception is buried further up |
+| **Never rename or restructure `src/main/java`** | Every Java tool on Earth assumes the Maven Standard Directory Layout; fighting it breaks tooling you haven't met yet |
+
+---
+
+## 10. Interview traps
 
 Cover the answers. Answer out loud first.
 
@@ -409,7 +441,7 @@ Class loading + JIT warm-up. The interpreter runs first; the JIT profiles hot me
 
 ---
 
-## 9. Retention check
+## 11. Retention check
 
 Say these out loud without looking:
 

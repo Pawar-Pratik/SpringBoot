@@ -1,6 +1,6 @@
 # Lesson 04 — Annotations, reflection & proxies
 
-> **This is the most important lesson in the course.** Everything people call "Spring magic" is built from three Java features: annotations (metadata), reflection (reading metadata and acting on it at runtime), and proxies (wrapping objects to add behaviour). Learn these three and Spring becomes a *predictable* framework you can reason about — including parts of it you've never seen.
+> **Why this lesson exists:** this is the most important lesson in the course. Everything people call "Spring magic" is built from three Java features: annotations (metadata), reflection (reading metadata and acting on it at runtime), and proxies (wrapping objects to add behaviour). Learn these three and Spring becomes a *predictable* framework you can reason about — including parts of it you've never seen.
 >
 > Do not skim this. Read it twice if you need to.
 
@@ -8,7 +8,15 @@
 
 ---
 
-## Part 1 — Annotations: metadata, and nothing more
+## Part 1 — The idea in one sentence
+
+> **There is no magic: annotations are inert metadata, reflection reads that metadata at startup and assembles your object graph, and proxies wrap the result to add behaviour — every surprising thing Spring ever does to you is one of those three mechanisms doing exactly what it says.**
+
+Hold those three words — *metadata, reflection, proxy* — and the rest of this course is detail. They also explain the failures: a silently-ignored `@Transactional` is the proxy, a startup-only error is reflection, and "how did Spring know?" is always metadata someone scanned for.
+
+---
+
+## Part 2 — Annotations: metadata, and nothing more
 
 ### An annotation does absolutely nothing by itself
 
@@ -129,7 +137,7 @@ Now `@ApiV1Controller` on a class gives you all three behaviours. Real teams do 
 
 ---
 
-## Part 2 — Reflection: the engine that reads the metadata
+## Part 3 — Reflection: the engine that reads the metadata
 
 **Reflection is the ability of a program to inspect and manipulate itself at runtime** — to ask a class what its methods are, read annotations, create instances, call methods, and set private fields, all using *names as data* rather than compile-time symbols.
 
@@ -182,7 +190,7 @@ Read those lines again. Every one corresponds to something Spring does:
 
 ---
 
-## Part 3 — Proxies: the mechanism behind `@Transactional`, `@Cacheable`, `@Async`
+## Part 4 — Proxies: the mechanism behind `@Transactional`, `@Cacheable`, `@Async`
 
 Here's the question that separates people who "use Spring" from people who *understand* it:
 
@@ -343,7 +351,7 @@ Hibernate uses the exact same technique — a generated subclass that intercepts
 
 ---
 
-## Part 4 — Putting it together: how Spring actually starts
+## Part 5 — Putting it together: how Spring actually starts
 
 You now have every piece. Here's the whole thing in ~10 steps:
 
@@ -384,7 +392,7 @@ If you can narrate those ten steps in an interview, you will immediately be trea
 
 ---
 
-## Part 5 — Build this: write your own mini Spring
+## Part 6 — Build & break: write your own mini Spring
 
 **This is the most valuable exercise in the course. Do not skip it.** In about 100 lines you'll build a working DI container with annotation scanning and a proxy-based aspect. After this, Spring's behaviour is something you *derived*, not something you memorized.
 
@@ -515,9 +523,34 @@ svc.createTwo("a", "b");                         // 3. NO TX AT ALL — you just
 - Make `MonitorService` depend on a bean that depends back on it → your container recurses forever. That's a circular dependency, and now you understand *why* Spring has to detect it (Lesson 07).
 - Add a second implementation of `MonitorOperations` → your container can't decide. That's exactly `NoUniqueBeanDefinitionException`, and it's why `@Qualifier` and `@Primary` exist.
 
+### Explain out loud (60s)
+
+1. Rebut "Spring is too magical" in four sentences using *annotation*, *reflection*, *proxy* and *conditional*.
+2. What `@Retention(RUNTIME)` buys you, and what `@Override` proves about the alternative.
+3. The self-invocation trap: the object references involved, and why it fails silently.
+4. Why `final` and `private` break proxying, and what you observe when they do.
+5. The one line in your mini-container that *is* dependency injection, and the one that *is* AOP.
+
 ---
 
-## Part 6 — Interview traps
+## Part 7 — Production rules
+
+| Do / Never | Why |
+|---|---|
+| **Never mark a class or method `final` if it carries `@Transactional`, `@Async`, `@Cacheable` or `@PreAuthorize`** | CGLIB advises by subclassing and overriding; a `final` member can't be overridden, so the annotation is ignored with no error at all |
+| **Never put a proxied annotation on a `private` method** | Same mechanism, same silence — `private` methods aren't overridable, so the advice never runs |
+| **Never call an annotated method with `this.`** | `this` is the target object, not the proxy, so the call bypasses the advice entirely — this is the single most common real Spring bug |
+| **Fix self-invocation by extracting the method into another bean, not by self-injecting** | The need for self-invocation almost always means two responsibilities are stuck in one class; `@Lazy` self-injection hides that instead of fixing it |
+| **When an annotation "does nothing", print `bean.getClass().getName()` first** | If you don't see `$$SpringCGLIB` or `$Proxy`, the bean isn't proxied and the rest of your debugging is wasted |
+| **Your own annotations need `@Retention(RUNTIME)`** | `CLASS` is the default and keeps them out of reflection, so your framework code will never see them |
+| **Compose meta-annotations instead of repeating a stack of them** | `@ApiV1Controller` puts a team convention in one place that Spring resolves recursively, so it can't drift file by file |
+| **Never write reflection into application code** | It discards compile-time safety for a flexibility business logic doesn't need; frameworks pay that price deliberately, you shouldn't |
+| **Never call `setAccessible(true)` on another team's or the JDK's internals** | It breaks encapsulation, and since Java 9's module system it increasingly breaks outright rather than warning |
+| **Keep reflection out of request paths — reflect once at startup** | That is precisely why Spring is slow to start and normal at runtime; moving reflection into a hot path gives you the cost without the benefit |
+
+---
+
+## Part 8 — Interview traps
 
 **Q1. What does an annotation actually do?**
 Nothing. It's metadata attached to a program element. A framework must read it (via reflection, if `RetentionPolicy.RUNTIME`) and implement behaviour. `@Override` is `SOURCE` retention and truly vanishes; `@Transactional` is `RUNTIME` and is read by Spring at startup.
@@ -554,7 +587,7 @@ Annotations on annotations. Spring resolves them recursively (`MergedAnnotations
 
 ---
 
-## Part 7 — Retention check
+## Part 9 — Retention check
 
 Answer out loud, no notes:
 

@@ -6,7 +6,15 @@
 
 ---
 
-## 1. Lambdas: passing behaviour as a value
+## 1. The idea in one sentence
+
+> **A lambda is nothing but an object implementing a one-method interface — so every "magical" modern Spring API is an ordinary method taking an ordinary argument, and you can read any of them by asking "which single-method interface does this lambda implement?"**
+
+That question dissolves Spring Security's `http.authorizeHttpRequests(auth -> ...)`, `RestClient`'s fluent chain, `orElseGet`, `@Async` and Resilience4j in one move. Streams and `Optional` are then just two libraries built on top of it — one for pipelines, one for absence.
+
+---
+
+## 2. Lambdas: passing behaviour as a value
 
 Before Java 8, if you wanted to pass *code* to a method, you needed a whole class:
 
@@ -122,7 +130,7 @@ Instance fields *can* be mutated from a lambda — which is exactly how you acci
 
 ---
 
-## 2. Streams: declarative data pipelines
+## 3. Streams: declarative data pipelines
 
 A stream is **not** a collection. It's a *pipeline description*: a source, zero or more lazy intermediate operations, and one terminal operation that actually runs everything.
 
@@ -231,7 +239,7 @@ List<String> out = items.stream().map(Item::name).toList();  // ✅
 
 ---
 
-## 3. `Optional` — explicit absence
+## 4. `Optional` — explicit absence
 
 `Optional<T>` is a container holding either a value or nothing. Its purpose is to make "this might not exist" **visible in the type signature** instead of a runtime surprise.
 
@@ -294,7 +302,7 @@ List<Optional<Monitor>> results;             // filter the empties out instead
 
 ---
 
-## 4. Other modern syntax you'll see everywhere
+## 5. Other modern syntax you'll see everywhere
 
 ### `var` — local type inference (Java 10+)
 
@@ -357,7 +365,7 @@ Now `switch` over `CheckOutcome` is provably exhaustive. Sealed interface + reco
 
 ---
 
-## 5. `CompletableFuture` — a preview
+## 6. `CompletableFuture` — a preview
 
 You'll meet this properly in Lesson 32, but recognize the shape:
 
@@ -372,7 +380,7 @@ It's a promise with a functional API. `@Async` methods can return one. Note it t
 
 ---
 
-## 6. Build this
+## 7. Build & break
 
 In `com.vigil.playground`, build a small analytics utility over sample data. **Type it. Predict outputs before running.**
 
@@ -406,9 +414,36 @@ list.stream().peek(System.out::println).filter(r -> r.responseTimeMs() > 100).fi
 
 That last one is the laziness lesson. It won't print all 10.
 
+### Explain out loud (60s)
+
+1. What a functional interface is, and why that makes Spring Security's config readable.
+2. Prove streams are lazy, using `peek` and `findFirst`.
+3. `map` vs `flatMap`, with a concrete 1→many example.
+4. `orElse` vs `orElseGet` — the exact difference, and when it costs you.
+5. The one place `Optional` belongs, and two places it doesn't.
+
 ---
 
-## 7. Interview traps
+## 8. Production rules
+
+| Do / Never | Why |
+|---|---|
+| **`orElseGet(supplier)` whenever the default costs anything** | `orElse(expensiveCall())` evaluates its argument *even when the value is present* — the work happens on the happy path |
+| **`Optional` as a return type only — never a field, parameter or collection element** | It exists to say "no result" to a caller; anywhere else it adds allocation and breaks serialization and JPA |
+| **`orElseThrow(() -> new DomainException(id))`, never `.get()`** | `.get()` throws `NoSuchElementException` with no context, so the stack trace tells you nothing about what was missing |
+| **Never `parallelStream()` in a request path** | It runs on the shared common ForkJoinPool, so one bad call starves the whole JVM — and your requests are already parallel across Tomcat threads |
+| **Never stream over a lazy JPA collection** | `flatMap(o -> o.getMonitors().stream())` is the N+1 problem in a functional disguise; fix it in the query, not the pipeline |
+| **No side effects inside a stream; `peek` is for debugging only** | Accumulating into an external list isn't thread-safe and defeats the pipeline — `map(...).toList()` already does it |
+| **Give `Collectors.toMap` a merge function** | It throws `IllegalStateException` on the first duplicate key, which real data supplies sooner than test data does |
+| **`var` only when the right-hand side names the type** | `var x = service.process()` removes information rather than redundancy, and the reader pays for it on every future read |
+| **`switch` expressions over enums and sealed types, with no `default`** | Exhaustiveness turns "someone added a case and forgot a branch" from a production bug into a compile error |
+| **Always pass an explicit executor to `CompletableFuture`** | The default is the common ForkJoinPool, shared with every parallel stream in the JVM and sized for CPU work, not I/O |
+| **`log.debug("state {}", monitor)`, never string concatenation** | SLF4J defers formatting, so the cost disappears entirely when the level is off |
+| **Reach for a `for` loop when you're iterating for side effects** | Streams win at transformation pipelines; for plain iteration a loop is more readable and you can actually step through it |
+
+---
+
+## 9. Interview traps
 
 **Q1. What is a functional interface, and why do lambdas need one?**
 An interface with exactly one abstract method. A lambda is an implementation of one — the compiler uses the target type to know which interface. `@FunctionalInterface` makes the constraint compiler-checked. This is why lambdas work with *any* single-method interface, including your own and Spring's `Customizer`.
@@ -439,7 +474,7 @@ They restrict which types may implement them, so the compiler knows the full set
 
 ---
 
-## 8. Retention check
+## 10. Retention check
 
 1. Why is `Customizer<T>` in Spring Security config just a lambda, and what does that tell you about reading unfamiliar Spring APIs?
 2. You see `orElse(expensiveCall())` in a code review. What do you comment?
