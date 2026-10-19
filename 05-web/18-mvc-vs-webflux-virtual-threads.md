@@ -6,7 +6,15 @@
 
 ---
 
-## 1. The two problems reactive was invented for
+## 1. The idea in one sentence
+
+> **Reactive isn't faster — it's *denser*: it trades thread-per-request for an event loop so that waiting stops costing a megabyte of stack, and virtual threads now give you most of that density while letting you keep imperative code, JPA, stack traces and `ThreadLocal`.**
+
+Which reframes the question you'll be asked. "Should we use reactive?" is really "do we need backpressure, or a concurrency ceiling that platform threads can't reach, badly enough to give up the entire blocking ecosystem?"
+
+---
+
+## 2. The two problems reactive was invented for
 
 ### Problem 1 — Thread-per-request doesn't scale to high concurrency
 
@@ -29,7 +37,7 @@ A producer faster than a consumer (a firehose of check results into a slow datab
 
 ---
 
-## 2. The reactive model
+## 3. The reactive model
 
 ```
    MVC (thread-per-request)                  WebFlux (event loop)
@@ -145,7 +153,7 @@ Nothing tells you *which request* or *which of your lines* failed. `Hooks.onOper
 
 ---
 
-## 3. Virtual threads — the plot twist
+## 4. Virtual threads — the plot twist
 
 Java 21 (Sept 2023) delivered virtual threads (Project Loom), and they change the calculus substantially.
 
@@ -183,7 +191,7 @@ The virtual thread blocks; the OS thread doesn't. You get **reactive-like scalab
 
 ---
 
-## 4. The decision framework
+## 5. The decision framework
 
 ### Choose **MVC + virtual threads** (the default in 2026) when:
 - You're building a typical REST API / CRUD service — **this is most software**
@@ -227,7 +235,7 @@ That answer demonstrates: you know both models, you know what changed, you know 
 
 ---
 
-## 5. `WebClient` and `RestClient` — use them regardless
+## 6. `WebClient` and `RestClient` — use them regardless
 
 Even in an MVC app, you'll use these for outbound calls. Vigil's entire purpose is outbound HTTP.
 
@@ -300,7 +308,7 @@ This is Lesson 14's thread starvation with an external trigger. It's the single 
 
 ---
 
-## 6. Build this
+## 7. Build & break
 
 **1. Measure the difference yourself.** Add:
 ```java
@@ -380,9 +388,35 @@ Configure a 5s connect and 10s read timeout. **Then test it against a deliberate
 
 **7. HTTP interface.** Convert your Slack notification channel to the `@PostExchange` declarative style.
 
+### Explain out loud (60s)
+
+1. The two problems reactive was invented for, and which one virtual threads don't solve.
+2. What one blocking call on an event loop does, and why it's worse than MVC degrading.
+3. What you give up by moving from JPA to R2DBC.
+4. The calibrated answer to "should we use reactive?" in three sentences.
+5. Why every outbound call needs both a connect and a read timeout.
+
 ---
 
-## 7. Interview traps
+## 8. Production rules
+
+| Do / Never | Why |
+|---|---|
+| **Never block on an event-loop thread** | With roughly one loop per core, eight slow blocking calls freeze every endpoint for every user — far worse than MVC's gradual degradation |
+| **Don't adopt WebFlux unless the whole stack is non-blocking** | One JDBC call, one blocking library, one `ThreadLocal` and the model is broken; reactive is unforgiving by design |
+| **Know that R2DBC means giving up JPA** | No `@OneToMany`, no lazy loading, no dirty checking — fine for append-heavy schemas, a large loss for a rich domain model |
+| **Default to MVC plus virtual threads for ordinary services** | You get the concurrency ceiling without surrendering imperative code, readable stack traces, the debugger or the blocking ecosystem |
+| **Choose reactive for backpressure, not for speed** | Demand signalling is the one thing virtual threads genuinely don't give you, and it's the honest reason to pay the cost |
+| **Use `RestClient` or `WebClient` in new code, not `RestTemplate`** | `RestTemplate` is in maintenance mode — not deprecated, but it will never gain another feature |
+| **Set a connect timeout and a read timeout on every outbound call** | The defaults are effectively infinite, so one hung upstream holds a thread forever and eventually takes the pool with it |
+| **Use `concatMap` when order matters; `flatMap` only when it doesn't** | `flatMap` interleaves, so ordering bugs it causes are intermittent and nearly impossible to reproduce |
+| **Never build a `Mono` and forget to return it** | Nothing runs until subscription, so the work simply doesn't happen — and it fails silently |
+| **In WebFlux, replace `ThreadLocal` with Reactor Context** | A request hops threads mid-pipeline, so MDC, `SecurityContextHolder` and request scope have no thread to be bound to |
+| **Wrap unavoidable blocking work on `boundedElastic()`** | It keeps the blocking call off the event loop, which is the difference between one slow dependency and a frozen application |
+
+---
+
+## 9. Interview traps
 
 **Q1. When would you use WebFlux over MVC?**
 When I need streaming with backpressure (SSE/WebSocket fan-out, or a fast producer that must be throttled by a slow consumer); when the service is an I/O-bound gateway/aggregator with very high connection counts and little business logic; and when the whole stack is already non-blocking. Otherwise I default to MVC with virtual threads, because it gives similar scalability without giving up JPA, stack traces, ThreadLocal context, or team familiarity.
@@ -419,7 +453,7 @@ Measure first. Slowness is usually a database problem — a missing index, an N+
 
 ---
 
-## 8. Retention check
+## 10. Retention check
 
 1. What resource does thread-per-request waste, and roughly how much per thread?
 2. Why does one blocking call in WebFlux hurt far more than one slow endpoint in MVC?

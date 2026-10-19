@@ -6,7 +6,15 @@
 
 ---
 
-## 1. OpenAPI / Swagger
+## 1. The idea in one sentence
+
+> **CORS is enforced by the *browser*, not your server: the request was sent, the server answered, and the browser refused to hand the response to JavaScript — and almost every confusion about it dissolves once you've seen that 200 in the Network tab.**
+
+The other two topics are the same concern from different angles: documentation generated from your code can't drift away from it, and cross-cutting work only behaves if you put it at a layer that can actually see the requests it needs to.
+
+---
+
+## 2. OpenAPI / Swagger
 
 **OpenAPI** is the specification (a JSON/YAML description of your API). **Swagger** is the tooling family that reads it (Swagger UI, Codegen). Historically the spec *was* called Swagger; it was donated to the Linux Foundation in 2015 and renamed OpenAPI. Using the terms correctly is a small credibility marker.
 
@@ -132,7 +140,7 @@ springdoc:
 
 ---
 
-## 2. CORS — properly, not by copy-paste
+## 3. CORS — properly, not by copy-paste
 
 ### What problem CORS solves
 
@@ -250,7 +258,7 @@ Same code, different values — the Lesson 12 principle applied. No profile-cond
 
 ---
 
-## 3. Filters, interceptors, and aspects — the decision matrix
+## 4. Filters, interceptors, and aspects — the decision matrix
 
 You met the mechanics in Lesson 14. Here's the decision table you should be able to reproduce, plus the implementations.
 
@@ -378,7 +386,7 @@ FilterRegistrationBean<CorrelationIdFilter> correlationIdFilter() {
 
 ---
 
-## 4. Rate limiting (a filter, and Vigil needs it)
+## 5. Rate limiting (a filter, and Vigil needs it)
 
 Vigil's public status pages are unauthenticated and get hammered. Rate limiting is not optional.
 
@@ -424,7 +432,7 @@ Algorithms, briefly: **fixed window** (simple, but allows a 2× burst at the bou
 
 ---
 
-## 5. Build this
+## 6. Build & break
 
 **1. Add springdoc** and open `/swagger-ui.html`. Note how much is generated from code you already wrote.
 
@@ -456,9 +464,36 @@ fetch('http://localhost:8080/api/v1/monitors')
 
 **9. Rate limiting.** Simplest version first: a `ConcurrentHashMap<String, AtomicInteger>` with a fixed window. Verify the headers and the 429 with `Retry-After`. Then write down why this breaks with three instances — that's your Module 9 to-do.
 
+### Explain out loud (60s)
+
+1. Why CORS errors show a 200 in the Network tab, and what that tells you about where it's enforced.
+2. What triggers a preflight, and how to stop paying for it on every call.
+3. Why `allowedOrigins("*")` plus credentials is refused at startup.
+4. Why adding Spring Security breaks CORS, and the one-line fix.
+5. Filter vs interceptor: which sees a 404, and which can see the handler method.
+
 ---
 
-## 6. Interview traps
+## 7. Production rules
+
+| Do / Never | Why |
+|---|---|
+| **Use `springdoc-openapi`, never `springfox`** | Springfox's last release was 2020 and it never supported Boot 3; recommending it dates you immediately |
+| **Declare precise return types, not `ResponseEntity<?>`** | The wildcard documents nothing, while a concrete DTO plus its validation constraints generates the schema for free |
+| **Put `example` values on every DTO field** | Swagger UI pre-fills "Try it out" with them, so a new consumer succeeds in ten seconds instead of guessing your schema |
+| **Disable or authenticate Swagger UI for internal APIs** | For a public API it's onboarding; for an internal one it's a free map of your attack surface, parameter names and validation rules included |
+| **Never treat the docs as a security boundary** | Hiding an endpoint from Swagger does nothing; only Spring Security decides who may call it |
+| **Diff the generated `api-docs` JSON in CI** | A change to that file *is* a change to your contract, and reviewing it catches breaking changes before your clients do |
+| **Never combine `allowedOrigins("*")` with `allowCredentials(true)`** | Spring refuses this at startup on purpose — it would let any site on the internet make authenticated requests as your users |
+| **List exact origins rather than patterns** | A pattern that accidentally matches `evil-vigil.io` is indistinguishable from a correct config until it isn't |
+| **Set `maxAge` on your CORS config** | Otherwise every non-simple request pays an extra OPTIONS round trip, which on a chatty frontend doubles your request count |
+| **Add `.cors(Customizer.withDefaults())` when Spring Security is present** | Otherwise the preflight is rejected with a 401 before your CORS config is ever consulted — the single most-asked Spring CORS question |
+| **Put correlation IDs, request logging and auth in filters** | Only filters run for 404s, static resources and requests that never reach a handler, which is exactly when you want those |
+| **Redact query strings and skip health checks before logging a request** | `?token=secret123` in a log aggregator is a credential leak, and health-check noise is what makes people stop reading logs |
+
+---
+
+## 8. Interview traps
 
 **Q1. What is CORS and what problem does it solve?**
 Browsers enforce the Same-Origin Policy so JavaScript on one origin can't read responses from another — which is what stops a malicious site from making authenticated requests to your bank and reading the result. CORS is the server opting specific other origins in, via `Access-Control-Allow-*` headers.
@@ -495,7 +530,7 @@ Tokens, API keys, passwords, and PII — including in query strings, which are c
 
 ---
 
-## 7. Retention check
+## 9. Retention check
 
 1. In one sentence: who enforces CORS, and what does that mean for whether it protects your API?
 2. Why is a cross-origin `POST` with `Content-Type: application/json` preflighted, but a form POST isn't?

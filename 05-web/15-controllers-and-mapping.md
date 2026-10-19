@@ -6,7 +6,15 @@
 
 ---
 
-## 1. Controller basics
+## 1. The idea in one sentence
+
+> **A controller's only job is to translate HTTP into a method call and a return value back into HTTP — so every detail in this lesson exists to make that translation explicit, and every bug in it is something accepted, dropped or serialized silently.**
+
+A missing `@Valid`, a `required = false` bound to an `int`, an `Instant` rendered as an array: none of them throws where you'd look. Being deliberate about binding and serialization is what makes a controller behave the way you intended.
+
+---
+
+## 2. Controller basics
 
 ```java
 @RestController                                  // = @Controller + @ResponseBody on every method
@@ -89,7 +97,7 @@ public class MonitorController {
 
 ---
 
-## 2. Getting data in
+## 3. Getting data in
 
 ### `@PathVariable` — resource identity
 
@@ -207,7 +215,7 @@ For date formats:
 
 ---
 
-## 3. Getting data out
+## 4. Getting data out
 
 ### Return the object (preferred)
 
@@ -265,7 +273,7 @@ Simple, but a `@ControllerAdvice` gives you a consistent error *body*, which mat
 
 ---
 
-## 4. JSON serialization with Jackson
+## 5. JSON serialization with Jackson
 
 Boot auto-configures an `ObjectMapper`. Understanding and controlling it is what separates a polished API from a leaky one.
 
@@ -382,7 +390,7 @@ public sealed interface CheckConfig permits HttpCheckConfig, TcpCheckConfig, Ssl
 
 ---
 
-## 5. HTTP caching (cheap and underused)
+## 6. HTTP caching (cheap and underused)
 
 For a public status page polled by thousands of browsers, this is real money:
 
@@ -409,7 +417,7 @@ ShallowEtagHeaderFilter shallowEtagHeaderFilter() { return new ShallowEtagHeader
 
 ---
 
-## 6. `@Controller` + Thymeleaf (for Vigil's public status page)
+## 7. `@Controller` + Thymeleaf (for Vigil's public status page)
 
 ```java
 @Controller
@@ -444,7 +452,7 @@ public class StatusPageController {
 
 ---
 
-## 7. Build this — Vigil's monitor API
+## 8. Build & break — Vigil's monitor API
 
 **Now we start the real project.** Create the full `monitor` feature slice in `com.vigil.monitor`.
 
@@ -495,9 +503,35 @@ Confirm the second returns **304** with an empty body.
 
 **7. The status page.** Add `spring-boot-starter-thymeleaf`, write `StatusPageController` and a minimal template. This is the first thing about Vigil a real user will see.
 
+### Explain out loud (60s)
+
+1. What `@RestController` adds over `@Controller`, and when you'd still want the latter.
+2. The `int` vs `Integer` trap on an optional request parameter.
+3. Why declaring your own `ObjectMapper` bean breaks date handling.
+4. When a request produces 415 and when 406, and who decides.
+5. Why returning an entity from a controller is a contract problem, not just a performance one.
+
 ---
 
-## 8. Interview traps
+## 9. Production rules
+
+| Do / Never | Why |
+|---|---|
+| **Put `@Valid` on every `@RequestBody`** | Constraint annotations on the DTO do nothing without it, so invalid data reaches your service and the validation looks like it's working |
+| **Never bind an optional `@RequestParam` to a primitive** | `@RequestParam(required = false) int size` can't hold null, so an absent parameter throws instead of defaulting — use `Integer` or `defaultValue` |
+| **Bind a criteria object once you pass about three query parameters** | Spring binds by property name with no extra annotation, and the object can carry `@Min`/`@Max` — eight `@RequestParam`s can't be validated as a unit |
+| **Never return an entity from a controller** | It welds your schema to your API contract and invites lazy-loading serialization failures; return a record DTO |
+| **Declare `consumes` and `produces` on mappings** | A mismatch then becomes a 415 or 406 during mapping, instead of a confusing failure inside your method |
+| **Customize Jackson with `Jackson2ObjectMapperBuilderCustomizer`, never your own `ObjectMapper` bean** | Declaring the bean replaces Boot's, silently dropping `JavaTimeModule` and every other registered default |
+| **Keep `write-dates-as-timestamps=false`** | ISO-8601 strings are readable, unambiguous and parseable by every client; epoch arrays are a debugging tax forever |
+| **Never trust `MultipartFile.getOriginalFilename()`** | It is attacker-supplied and the classic path-traversal vector — generate your own name and validate size and type |
+| **Use `ResponseEntity` only when status or headers are genuinely dynamic** | Otherwise `@ResponseStatus` plus a plain return type reads better and keeps the handler free of HTTP ceremony |
+| **Never `try/catch` in a controller** | Exceptions belong to `@ControllerAdvice`, where the mapping to a status code is defined once instead of per method |
+| **Put `**` only at the end of a path pattern** | Spring 6's `PathPatternParser` rejects it elsewhere, so an old `/api/**/monitors` fails outright after a Boot 3 upgrade |
+
+---
+
+## 10. Interview traps
 
 **Q1. `@Controller` vs `@RestController`?**
 `@RestController` = `@Controller` + `@ResponseBody` on every method, so return values are serialized to the body. `@Controller` returns view names for a template engine. Use `@RestController` for APIs, `@Controller` for server-rendered HTML.
@@ -537,7 +571,7 @@ It buffers the entire response in memory to compute the hash, so it saves *bandw
 
 ---
 
-## 9. Retention check
+## 11. Retention check
 
 1. Give the trap with `@RequestParam(required = false) int`.
 2. What does `@RestController` add over `@Controller`, mechanically?

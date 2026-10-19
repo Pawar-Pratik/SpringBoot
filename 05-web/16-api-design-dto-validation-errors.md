@@ -6,7 +6,15 @@
 
 ---
 
-## 1. Why DTOs — the argument in full
+## 1. The idea in one sentence
+
+> **A DTO is a contract boundary, not boilerplate — the moment an entity crosses your controller, your database schema becomes your public API, every column you add is published, and a client can set fields you never meant them to touch.**
+
+Validation and error handling are the same boundary seen from the other two directions: what you refuse to accept, and what you're willing to say when you refuse. All three are cheap to get right now and expensive to retrofit later.
+
+---
+
+## 2. Why DTOs — the argument in full
 
 Returning JPA entities from controllers is the single most common design flaw in Spring codebases. Here's why, with the reasons ordered by how badly each will hurt you.
 
@@ -92,7 +100,7 @@ public interface MonitorMapper {
 
 ---
 
-## 2. Bean Validation
+## 3. Bean Validation
 
 ```xml
 <dependency>
@@ -238,7 +246,7 @@ public @interface IntervalAboveTimeout { String message() default "interval must
 
 ---
 
-## 3. Error handling — the thing that makes an API feel professional
+## 4. Error handling — the thing that makes an API feel professional
 
 ### RFC 7807 / RFC 9457 Problem Details — use the standard
 
@@ -405,7 +413,7 @@ Or make your exceptions implement `ErrorResponse` so they carry their own `Probl
 
 ---
 
-## 4. API design decisions you'll be asked to defend
+## 5. API design decisions you'll be asked to defend
 
 ### Versioning
 
@@ -471,7 +479,7 @@ Store the key → response mapping (Redis, TTL 24h). A repeat returns the *origi
 
 ---
 
-## 5. Build this — Vigil's API, properly
+## 6. Build & break — Vigil's API, properly
 
 **1. Split your DTOs** into `CreateMonitorRequest`, `UpdateMonitorRequest`, `MonitorResponse`, `MonitorSummaryResponse`. Verify no entity ever crosses the controller boundary.
 
@@ -513,9 +521,35 @@ Confirm: **every** error has the same shape, a correlation ID, and no stack trac
 
 **7. Test the error contract.** A `@WebMvcTest` asserting the JSON shape of a validation failure. Errors are part of your API — regressions in them break clients just as hard as changes to success responses, and almost nobody tests them. (Module 8.)
 
+### Explain out loud (60s)
+
+1. Five distinct reasons not to return an entity, ordered by how badly each hurts.
+2. `@NotNull` vs `@NotEmpty` vs `@NotBlank`, with the input that distinguishes them.
+3. Two ways validation silently does nothing, and how to spot each.
+4. Why MapStruct over a reflective mapper.
+5. What belongs in an error response, and what must never appear in one.
+
 ---
 
-## 6. Interview traps
+## 7. Production rules
+
+| Do / Never | Why |
+|---|---|
+| **Never accept or return a JPA entity at the controller boundary** | Inbound it is a mass-assignment vulnerability; outbound it publishes your schema, every future column, and your lazy relationships |
+| **Keep separate `Create`, `Update` and `Response` DTOs** | The fields a client may set, may change, and may see are three different lists, and collapsing them is how `id` or `organizationId` becomes writable |
+| **Declare `spring-boot-starter-validation` explicitly** | It was removed from `starter-web` in Boot 2.3, and without it `@Valid` silently does nothing at all |
+| **Use `@NotBlank` for user-supplied strings** | `@NotNull` cheerfully accepts `"   "`, which is almost never what the field means |
+| **Put `@Valid` on nested fields too** | Cascading is not automatic — without it a nested object's constraints are never evaluated, silently |
+| **Use MapStruct with `unmappedTargetPolicy = ERROR`** | It generates plain Java at compile time, so an unmapped new field fails the build instead of returning null at runtime |
+| **Handle errors in one `@RestControllerAdvice`** | The mapping from exception to status code then exists once, instead of drifting across every controller that remembered to `try/catch` |
+| **Return RFC 9457 `ProblemDetail` with a correlation ID** | One machine-readable error shape lets clients handle failures generically, and the ID is what connects a user's screenshot to your logs |
+| **Never put an exception message or stack trace in a response** | They leak class names, SQL and file paths — attackers read them, and clients start depending on them |
+| **Validate user-supplied URLs against SSRF before fetching them** | An app whose job is fetching URLs will otherwise happily fetch `169.254.169.254` and hand over cloud credentials |
+| **Never return 500 for user error** | 400 for malformed, 404 for missing, 409 for a state conflict — a 500 tells the client to retry something that will never succeed |
+
+---
+
+## 8. Interview traps
 
 **Q1. Why not return JPA entities from controllers?**
 Five reasons: it makes your schema the public API contract (renames become breaking changes); it risks exposing sensitive fields automatically; Jackson triggers lazy loading → N+1, `LazyInitializationException`, or infinite recursion on bidirectional relations; one entity can't shape both list and detail responses; and as *input* it's a mass-assignment vulnerability letting clients set `id`, `status`, or `organizationId`.
@@ -555,7 +589,7 @@ Know what it is (hypermedia links driving client navigation, REST maturity level
 
 ---
 
-## 7. Retention check
+## 9. Retention check
 
 1. Give the five reasons against returning entities, and name the one that's a *security* issue.
 2. `@NotBlank` vs `@NotEmpty` on a `String` field — which do you want and why?

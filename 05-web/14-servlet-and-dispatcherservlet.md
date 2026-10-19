@@ -6,7 +6,15 @@
 
 ---
 
-## 1. Foundations: HTTP and the servlet container
+## 1. The idea in one sentence
+
+> **One servlet receives every request and one thread is held for its entire duration — so Spring MVC is a front controller with pluggable strategies, and most production latency incidents are that thread being held by something slow.**
+
+Narrating the lifecycle gets you through the interview; the thread arithmetic — `throughput = threads / latency` — is what lets you diagnose the service that is "down" while the CPU sits at 3%.
+
+---
+
+## 2. Foundations: HTTP and the servlet container
 
 ### HTTP, precisely enough
 
@@ -121,7 +129,7 @@ That works because of `@ConditionalOnClass` (Lesson 11): each container's auto-c
 
 ---
 
-## 2. Tomcat's threading model — the part that explains production incidents
+## 3. Tomcat's threading model — the part that explains production incidents
 
 This is the most operationally important section in this lesson.
 
@@ -189,7 +197,7 @@ Now each request gets a **virtual thread**: a JVM-managed continuation that cost
 
 ---
 
-## 3. `DispatcherServlet` — the front controller
+## 4. `DispatcherServlet` — the front controller
 
 Spring MVC registers **one** servlet mapped to `/`. Every request goes through it.
 
@@ -290,7 +298,7 @@ Register it via `WebMvcConfigurer.addArgumentResolvers(...)`. **Vigil uses this 
 
 ---
 
-## 4. Filters vs Interceptors — a decision you'll be asked to justify
+## 5. Filters vs Interceptors — a decision you'll be asked to justify
 
 ```
 Tomcat
@@ -348,7 +356,7 @@ public class CorrelationIdFilter extends OncePerRequestFilter {
 
 ---
 
-## 5. Async request processing
+## 6. Async request processing
 
 The blocking model holds a worker thread for the whole request. Async releases it:
 
@@ -379,7 +387,7 @@ Return types Spring MVC understands asynchronously: `Callable<T>`, `DeferredResu
 
 ---
 
-## 6. Build this
+## 7. Build & break
 
 **1. ⭐ Watch a real request go through, end to end.**
 ```properties
@@ -426,9 +434,35 @@ Observe: 5 run immediately, 2 queue, the rest are **refused**. You just reproduc
 
 **7. Custom argument resolver.** Implement `@CurrentTenant` from §3 (read the tenant from a header for now). Use it in a controller. This is a genuinely impressive thing to be able to write from scratch in an interview.
 
+### Explain out loud (60s)
+
+1. The request lifecycle from TCP socket to JSON, naming each component in order.
+2. 401 vs 403, and which methods are safe and which idempotent.
+3. The thread arithmetic, and why one slow dependency takes down unrelated endpoints.
+4. What virtual threads change, what they don't, and the two caveats.
+5. Filter vs interceptor vs aspect — what each can see, and the deciding case.
+
 ---
 
-## 7. Interview traps
+## 8. Production rules
+
+| Do / Never | Why |
+|---|---|
+| **401 means unauthenticated, 403 means authenticated and refused** | The names are historically backwards, and the distinction tells the client whether retrying with credentials can possibly help |
+| **Send `Location` on every 201, and `Retry-After` on every 429** | Without them the client has to guess where the resource went or when to come back, and guessing clients retry aggressively |
+| **Treat POST as non-idempotent and give it an idempotency key** | Mobile clients, load balancers and consumers all retry on timeout; two POSTs create two monitors, and no amount of care at the client fixes that |
+| **Stay on Tomcat unless you've measured a reason not to** | Switching is one dependency swap, but the industry's operational knowledge of Tomcat is worth more than a marginal benchmark win |
+| **Never size a thread pool without doing `threads / latency` arithmetic** | 200 threads against a 2-second dependency is 100 req/s, whatever your CPU is doing — capacity is set by the slowest call, not the hardware |
+| **Put a timeout on every outbound call** | Without one, threads pile up on a slow dependency until the pool is empty and endpoints that never touch it start failing too |
+| **Say out loud that virtual threads move the bottleneck rather than removing it** | A million virtual threads and ten Hikari connections means a million threads queueing on the pool — the constraint relocates, it doesn't vanish |
+| **On Java 21, use `ReentrantLock` instead of `synchronized` around blocking calls** | A `synchronized` block pins the carrier thread, cancelling the benefit of virtual threads; this was only fixed in much later JDKs |
+| **Put cross-cutting HTTP concerns in a `Filter`, not an interceptor or an aspect** | Only the filter runs for 404s, static resources and requests that never reach a controller — which is exactly when you need a correlation ID |
+| **Always `MDC.clear()` in a `finally`** | Worker threads are pooled and reused, so a stale entry attaches one request's correlation ID to the next user's logs |
+| **Never authenticate in a controller** | Authentication happens in the security filter chain, before Spring MVC exists — a check in the controller is both too late and easy to forget |
+
+---
+
+## 9. Interview traps
 
 **Q1. Walk me through what happens when an HTTP request hits your Spring Boot app.** *(the flagship question)*
 Give §3: TCP → Tomcat acceptor/poller → a worker thread from the pool → the servlet filter chain (including Spring Security) → `DispatcherServlet.doDispatch` → `HandlerMapping` finds the handler → interceptor `preHandle` → `HandlerAdapter` uses argument resolvers (and `HttpMessageConverter` for `@RequestBody`) to build parameters → your controller method is invoked reflectively → the return value goes through a return-value handler and message converter to JSON → `postHandle` → exception resolvers if anything threw → `afterCompletion` → response flushed → **the worker thread returns to the pool**.
@@ -468,7 +502,7 @@ A custom `HandlerMethodArgumentResolver` bound to a custom annotation (e.g. `@Cu
 
 ---
 
-## 8. Retention check
+## 10. Retention check
 
 1. Narrate the request lifecycle naming at least six Spring components. Time yourself; aim for 90 seconds.
 2. With 200 threads and a uniform 500ms response time, what's your theoretical max throughput? What if one endpoint slows to 5s?
