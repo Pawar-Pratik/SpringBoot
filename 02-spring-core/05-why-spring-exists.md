@@ -6,7 +6,15 @@
 
 ---
 
-## 1. Let's build the pain
+## 1. The idea in one sentence
+
+> **`new` inside a class is a compile-time commitment to one specific collaborator; dependency injection turns that commitment into a runtime choice — and every benefit people credit to Spring follows from that single conversion.**
+
+Testability, swappable implementations, and cross-cutting concerns are not three features. They are three consequences of the same move: once something external decides what a class receives, it can also decide to hand over a fake, a different implementation, or a proxy.
+
+---
+
+## 2. Let's build the pain
 
 Forget Spring. You're writing a Java service that saves a monitor and notifies a Slack channel.
 
@@ -111,7 +119,7 @@ public void createMonitor(...) {
 
 ---
 
-## 2. Step one: invert the control
+## 3. Step one: invert the control
 
 The fix for Problems 1 and 2 requires no framework whatsoever. Just stop calling `new`:
 
@@ -173,7 +181,7 @@ Fast, no network, no database, deterministic.
 
 ---
 
-## 3. Step two: something has to assemble the graph
+## 4. Step two: something has to assemble the graph
 
 We've fixed coupling but made Problem 3 *worse* — now every caller must construct everything.
 
@@ -212,7 +220,7 @@ public class MonitorService {
 
 ---
 
-## 4. What Spring actually is (the map)
+## 5. What Spring actually is (the map)
 
 People say "Spring" to mean at least three different things. Being precise here is a small but noticeable credibility marker.
 
@@ -256,7 +264,7 @@ People say "Spring" to mean at least three different things. Being precise here 
 
 ---
 
-## 5. The honest case against Spring
+## 6. The honest case against Spring
 
 A true expert can argue *both* sides. Interviewers notice, because it signals judgment rather than fandom. Here are the criticisms, and the fair responses.
 
@@ -285,7 +293,7 @@ There's a real school of thought here (particularly in Go and functional communi
 
 ---
 
-## 6. Where Spring sits in the industry (context you'll be expected to have)
+## 7. Where Spring sits in the industry (context you'll be expected to have)
 
 - **Adoption:** the dominant server-side Java framework, by a wide margin, especially in banking, insurance, telecom, retail, and enterprise SaaS. In many companies "Java backend developer" and "Spring developer" are used interchangeably.
 - **Jakarta EE:** the standards-based alternative (formerly Java EE / J2EE — renamed after Oracle transferred it to the Eclipse Foundation and lost the "Java" trademark for it). Spring *implements or uses* several Jakarta specs — Servlet, JPA, Bean Validation, Jakarta Annotations — while rejecting the full EJB programming model. **Boot 3's biggest breaking change was `javax.*` → `jakarta.*`**, which is exactly why Boot 2 → 3 migration was painful. Expect a question on this.
@@ -308,7 +316,7 @@ There's a real school of thought here (particularly in Go and functional communi
 
 ---
 
-## 7. Build this
+## 8. Build & break
 
 Small but genuinely instructive. In `com.vigil.playground.di`:
 
@@ -336,9 +344,32 @@ Run the app. It works, and you wrote zero wiring code. **You now know exactly wh
 
 **Step 6 — Break it on purpose:** delete `@Component` from `SlackNotifier`. Read the full error message carefully. Spring will tell you which bean was required, by which class, and suggest defining one. Notice how much better that is than the error from your mini-container in Lesson 04.
 
+### Explain out loud (60s)
+
+1. Why `new SlackNotifier()` inside a service is a design problem — without saying "loose coupling".
+2. IoC, DI and DIP in one sentence each, and how they fit together.
+3. The four things Spring Boot added to Spring Framework, in order of impact.
+4. Two situations where you'd argue against Spring Boot, and what you'd reach for instead.
+5. What broke in the Boot 2 → 3 upgrade, and why it was ecosystem-wide.
+
 ---
 
-## 8. Interview traps
+## 9. Production rules
+
+| Do / Never | Why |
+|---|---|
+| **Never construct a collaborator with `new` inside a service** | It is a compile-time decision no test can override, which is exactly why the test gets skipped and the code rots |
+| **Depend on the narrowest interface that expresses the need** | `NotificationChannel` lets a new channel arrive with zero changes here; `SlackNotifier` makes every new channel edit this class |
+| **Don't adopt a container for a small system** | DI's value scales with the size of the object graph and the number of contributors; for a 200-line tool, explicit `new` in `main()` genuinely is simpler |
+| **Treat a growing hand-written wiring class as the signal, not the problem** | When ordering becomes load-bearing and sharing rules (one `DataSource`, one `HttpClient`) start causing resource exhaustion, that is what a container exists to own |
+| **Never say "we use Spring Boot, not Spring"** | Boot *is* Spring Framework plus auto-configuration, starters, an embedded server and Actuator — the phrase advertises a misunderstanding interviewers probe for |
+| **When Spring surprises you, reach for `--debug`, `/actuator/beans` and `/actuator/conditions`** | The "magic" is fully inspectable; adding annotations at random is how a five-minute question becomes an afternoon |
+| **Annotations for your own beans, externalized properties for environment config** | Annotations are concise and refactor-safe but need a recompile to change; environment values must move without one |
+| **Be able to name where you'd *not* choose Boot** | Cold-start-dominated serverless, tiny CLIs and extreme-latency systems are real limits — a candidate who thinks Spring is always right hasn't hit its edges |
+
+---
+
+## 10. Interview traps
 
 **Q1. What is dependency injection, and what problem does it solve?**
 Supplying a class's collaborators from outside instead of having it construct them. It solves: hard coupling to concrete implementations, untestability (no seam to substitute a double), and centralized object-graph construction. The sharpest framing: `new` inside a class is a compile-time commitment; DI makes it a runtime choice.
@@ -369,7 +400,7 @@ They perform DI and AOP at **build time** via annotation processors rather than 
 
 ---
 
-## 9. Retention check
+## 11. Retention check
 
 1. Explain in 60 seconds why `new SlackNotifier()` inside a service class is a design problem — without using the phrase "loose coupling."
 2. Give the one-sentence distinction between IoC, DI, and DIP.
